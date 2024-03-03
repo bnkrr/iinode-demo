@@ -1,0 +1,5 @@
+.vscode/
+.local/
+
+go.work
+go.work.sum

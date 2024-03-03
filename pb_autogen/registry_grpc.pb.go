@@ -4,7 +4,7 @@
 // - protoc             v4.25.3
 // source: registry.proto
 
-package proto
+package pb_autogen
 
 import (
 	context "context"
@@ -19,7 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Registry_RegisterService_FullMethodName = "/proto.Registry/RegisterService"
+	Registry_RegisterService_FullMethodName = "/pb_autogen.Registry/RegisterService"
 )
 
 // RegistryClient is the client API for Registry service.
@@ -96,7 +96,7 @@ func _Registry_RegisterService_Handler(srv interface{}, ctx context.Context, dec
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Registry_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "proto.Registry",
+	ServiceName: "pb_autogen.Registry",
 	HandlerType: (*RegistryServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

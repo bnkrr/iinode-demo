@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	pb "example.com/proto"
+	pb "github.com/bnkrr/iinode-demo/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

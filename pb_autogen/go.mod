@@ -1,4 +1,4 @@
-module github.com/bnkrr/iinode-demo/proto
+module github.com/bnkrr/iinode-demo/pb_autogen
 
 go 1.20
 

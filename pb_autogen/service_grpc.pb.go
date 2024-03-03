@@ -4,7 +4,7 @@
 // - protoc             v4.25.3
 // source: service.proto
 
-package proto
+package pb_autogen
 
 import (
 	context "context"
@@ -19,7 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Service_Call_FullMethodName = "/proto.Service/Call"
+	Service_Call_FullMethodName = "/pb_autogen.Service/Call"
 )
 
 // ServiceClient is the client API for Service service.
@@ -96,7 +96,7 @@ func _Service_Call_Handler(srv interface{}, ctx context.Context, dec func(interf
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Service_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "proto.Service",
+	ServiceName: "pb_autogen.Service",
 	HandlerType: (*ServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

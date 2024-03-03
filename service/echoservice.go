@@ -6,7 +6,7 @@ import (
 	"context"
 	"log"
 
-	pb "example.com/proto"
+	pb "github.com/bnkrr/iinode-demo/proto"
 )
 
 type EchoService struct{}

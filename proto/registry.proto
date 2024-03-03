@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package proto;
+package pb_autogen;
 
-option go_package = "example.com/proto";
+option go_package = "github.com/bnkrr/iinode-demo/pb_autogen";
 
 service Registry {
     rpc RegisterService (RegisterServiceRequest) returns (RegisterServiceResponse) {}

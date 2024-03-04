@@ -25,8 +25,10 @@ var (
 type ServiceHandler interface {
 	Name() string
 	Call(context.Context, *pb.ServiceCallRequest) (*pb.ServiceCallResponse, error)
+	CallStream(*pb.ServiceCallRequest, pb.Service_CallStreamServer) error
 	Version() string
 	Concurrency() int32
+	ReturnStream() bool
 }
 
 type BaseService struct {
@@ -41,8 +43,11 @@ func (s *BaseService) Call(ctx context.Context, req *pb.ServiceCallRequest) (*pb
 	return s.service.Call(ctx, req)
 }
 
-func (s *BaseService) Serve() {
+func (s *BaseService) CallStream(req *pb.ServiceCallRequest, stream pb.Service_CallStreamServer) error {
+	return s.service.CallStream(req, stream)
+}
 
+func (s *BaseService) Serve() {
 	listener, err := net.Listen(Network, ServiceAddress)
 	if err != nil {
 		log.Panicf("net.Listen err: %v", err)
@@ -70,10 +75,11 @@ func (s *BaseService) Register() {
 	}
 	port := (*s.netListener).Addr().(*net.TCPAddr).Port
 	s.registryClient.RegisterService(context.Background(), &pb.RegisterServiceRequest{
-		Name:        s.service.Name(),
-		Port:        int32(port),
-		Version:     s.service.Version(),
-		Concurrency: s.service.Concurrency(),
+		Name:         s.service.Name(),
+		Port:         int32(port),
+		Version:      s.service.Version(),
+		Concurrency:  s.service.Concurrency(),
+		ReturnStream: s.service.ReturnStream(),
 	})
 }
 
@@ -92,7 +98,8 @@ func NewService(registryAddress *string, service ServiceHandler) (*BaseService, 
 
 func main() {
 	flag.Parse()
-	s, err := NewService(registryAddress, &EchoService{}) // 改动此处服务类型
+	// s, err := NewService(registryAddress, &EchoService{}) // 改动此处服务类型
+	s, err := NewService(registryAddress, &StreamService{}) // 改动此处服务类型
 	if err != nil {
 		log.Panicf("new service err")
 	}

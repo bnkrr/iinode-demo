@@ -13,6 +13,7 @@ message RegisterServiceRequest {
     int32 port = 2;
     string version = 3;
     int32 concurrency = 4;
+    bool return_stream = 5;
 }
 
 message RegisterServiceResponse {

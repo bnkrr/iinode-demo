@@ -1,10 +1,10 @@
-module service
+module github.com/bnkrr/iinode-demo
 
 go 1.20
 
 require (
-	github.com/bnkrr/iinode-demo/pb_autogen v0.0.0-20240303150827-5f0c98839f8e
 	google.golang.org/grpc v1.62.0
+	google.golang.org/protobuf v1.32.0
 )
 
 require (
@@ -13,5 +13,4 @@ require (
 	golang.org/x/sys v0.16.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240123012728-ef4313101c80 // indirect
-	google.golang.org/protobuf v1.32.0 // indirect
 )

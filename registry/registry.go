@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"time"
@@ -23,36 +24,68 @@ var (
 
 type RegistryServer struct {
 	pb.UnimplementedRegistryServer
-	servicePort int
+	servicePort  int
+	returnStream bool
 }
 
 func (s *RegistryServer) RegisterService(ctx context.Context, req *pb.RegisterServiceRequest) (*pb.RegisterServiceResponse, error) {
 	log.Printf("%s listen at localhost:%d\n", req.Name, req.Port)
 	s.servicePort = int(req.Port)
+	s.returnStream = req.ReturnStream
 	return &pb.RegisterServiceResponse{Message: "success"}, nil
 }
 
 func (s *RegistryServer) Run() {
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", s.servicePort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Panicf("dial net.Connect err: %v", err)
+	}
+	defer conn.Close()
+	runnerClient := pb.NewServiceClient(conn)
+	resp, err := runnerClient.Call(context.Background(), &pb.ServiceCallRequest{Input: "something"})
+	if err != nil {
+		log.Printf("call err, try again later: %v\n", err)
+	} else {
+		log.Printf("output: %s\n", resp.Output)
+	}
+}
+
+func (s *RegistryServer) RunStream() {
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", s.servicePort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Panicf("dial net.Connect err: %v", err)
+	}
+	defer conn.Close()
+	runnerClient := pb.NewServiceClient(conn)
+	stream, err := runnerClient.CallStream(context.Background(), &pb.ServiceCallRequest{Input: "something"})
+	if err != nil {
+		log.Printf("call err, try again later: %v\n", err)
+	} else {
+		for {
+			resp, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Fatalf("%v.ListFeatures(_) = _, %v", runnerClient, err)
+			}
+			log.Printf("output: %s\n", resp.Output)
+		}
+	}
+}
+
+func (s *RegistryServer) RunRoutine() {
 	for {
 		if s.servicePort < 0 {
 			continue
 		}
-
-		conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", s.servicePort), grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			log.Panicf("dial net.Connect err: %v", err)
-		}
-		defer conn.Close()
-		runnerClient := pb.NewServiceClient(conn)
-		resp, err := runnerClient.Call(context.Background(), &pb.ServiceCallRequest{Input: "something"})
-		if err != nil {
-			log.Printf("call err, try again later: %v\n", err)
+		if s.returnStream {
+			s.RunStream()
 		} else {
-			log.Printf("output: %s\n", resp.Output)
+			s.Run()
 		}
 		time.Sleep(3 * time.Second)
 	}
-
 }
 
 func main() {
@@ -65,7 +98,7 @@ func main() {
 
 	grpcServer := grpc.NewServer()
 	regServer := RegistryServer{servicePort: -1}
-	go regServer.Run()
+	go regServer.RunRoutine()
 	pb.RegisterRegistryServer(grpcServer, &regServer)
 	grpcServer.Serve(listener)
 }

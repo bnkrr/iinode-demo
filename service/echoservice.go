@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	pb "github.com/bnkrr/iinode-demo/pb_autogen"
@@ -26,6 +27,11 @@ func (s *EchoService) Concurrency() int32 {
 	return 1
 }
 
+// 返回是否是一个流
+func (s *EchoService) ReturnStream() bool {
+	return false
+}
+
 // 服务的函数体，更改它实现具体的测量功能
 // 输入、输出的数据结构可见proto/service.proto
 // 输入结构体ServiceCallRequest有一个数据成员Input，是一个字符串（JSON）
@@ -33,4 +39,9 @@ func (s *EchoService) Concurrency() int32 {
 func (s *EchoService) Call(ctx context.Context, req *pb.ServiceCallRequest) (*pb.ServiceCallResponse, error) {
 	log.Printf("echo request: %s\n", req.Input)
 	return &pb.ServiceCallResponse{Output: req.Input}, nil
+}
+
+// 直接调用服务，无需实现stream方法
+func (s *EchoService) CallStream(req *pb.ServiceCallRequest, stream pb.Service_CallStreamServer) error {
+	return errors.New("not implemented")
 }

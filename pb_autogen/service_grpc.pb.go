@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Service_Call_FullMethodName = "/pb_autogen.Service/Call"
+	Service_Call_FullMethodName       = "/pb_autogen.Service/Call"
+	Service_CallStream_FullMethodName = "/pb_autogen.Service/CallStream"
 )
 
 // ServiceClient is the client API for Service service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ServiceClient interface {
 	Call(ctx context.Context, in *ServiceCallRequest, opts ...grpc.CallOption) (*ServiceCallResponse, error)
+	CallStream(ctx context.Context, in *ServiceCallRequest, opts ...grpc.CallOption) (Service_CallStreamClient, error)
 }
 
 type serviceClient struct {
@@ -46,11 +48,44 @@ func (c *serviceClient) Call(ctx context.Context, in *ServiceCallRequest, opts .
 	return out, nil
 }
 
+func (c *serviceClient) CallStream(ctx context.Context, in *ServiceCallRequest, opts ...grpc.CallOption) (Service_CallStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Service_ServiceDesc.Streams[0], Service_CallStream_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &serviceCallStreamClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Service_CallStreamClient interface {
+	Recv() (*ServiceCallResponse, error)
+	grpc.ClientStream
+}
+
+type serviceCallStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *serviceCallStreamClient) Recv() (*ServiceCallResponse, error) {
+	m := new(ServiceCallResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ServiceServer is the server API for Service service.
 // All implementations must embed UnimplementedServiceServer
 // for forward compatibility
 type ServiceServer interface {
 	Call(context.Context, *ServiceCallRequest) (*ServiceCallResponse, error)
+	CallStream(*ServiceCallRequest, Service_CallStreamServer) error
 	mustEmbedUnimplementedServiceServer()
 }
 
@@ -60,6 +95,9 @@ type UnimplementedServiceServer struct {
 
 func (UnimplementedServiceServer) Call(context.Context, *ServiceCallRequest) (*ServiceCallResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Call not implemented")
+}
+func (UnimplementedServiceServer) CallStream(*ServiceCallRequest, Service_CallStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method CallStream not implemented")
 }
 func (UnimplementedServiceServer) mustEmbedUnimplementedServiceServer() {}
 
@@ -92,6 +130,27 @@ func _Service_Call_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Service_CallStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ServiceCallRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ServiceServer).CallStream(m, &serviceCallStreamServer{stream})
+}
+
+type Service_CallStreamServer interface {
+	Send(*ServiceCallResponse) error
+	grpc.ServerStream
+}
+
+type serviceCallStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *serviceCallStreamServer) Send(m *ServiceCallResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Service_ServiceDesc is the grpc.ServiceDesc for Service service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -104,6 +163,12 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Service_Call_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "CallStream",
+			Handler:       _Service_CallStream_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "service.proto",
 }

@@ -12,16 +12,16 @@
 ## quickstart
 环境可参考网络中关于golang/grpc的内容。
 
-更改`service/`下的文件，以实现不同的测量功能。熟悉接口后，service可以使用其他语言（如python、java等）编写。
+更改`service/`下的文件，以实现不同的测量功能。熟悉gRPC接口后，service可以整体使用其他语言（如python、java等）编写。
 
 运行registry：
 ```shell
-cd registry && go run *.go --addr localhost:56789
+go run registry/*.go --addr localhost:56789
 ```
 
 同时运行service：
 ```shell
-cd service && go run *.go --reg-addr localhost:56789
+go run service/*.go --reg-addr localhost:56789
 ```
 
 此时可看到service向registry注册，并被registry周期性调用。

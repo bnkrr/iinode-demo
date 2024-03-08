@@ -62,25 +62,27 @@ func (s *BaseService) Serve() {
 }
 
 func (s *BaseService) Register() {
-	if s.registryClient == nil {
-		conn, err := grpc.Dial(*s.registryAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			log.Panicf("net.Connect err: %v", err)
-		}
-		defer conn.Close()
-		s.registryClient = pb.NewRegistryClient(conn)
+	conn, err := grpc.Dial(*s.registryAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Panicf("net.Connect err: %v", err)
 	}
+	defer conn.Close()
+	s.registryClient = pb.NewRegistryClient(conn)
+
 	if s.netListener == nil {
 		return
 	}
 	port := (*s.netListener).Addr().(*net.TCPAddr).Port
-	s.registryClient.RegisterService(context.Background(), &pb.RegisterServiceRequest{
+	_, err = s.registryClient.RegisterService(context.Background(), &pb.RegisterServiceRequest{
 		Name:         s.service.Name(),
 		Port:         int32(port),
 		Version:      s.service.Version(),
 		Concurrency:  s.service.Concurrency(),
 		ReturnStream: s.service.ReturnStream(),
 	})
+	if err != nil {
+		log.Printf("register err, %v", err)
+	}
 }
 
 func (s *BaseService) RegisterRoutine() {
@@ -98,8 +100,8 @@ func NewService(registryAddress *string, service ServiceHandler) (*BaseService, 
 
 func main() {
 	flag.Parse()
-	// s, err := NewService(registryAddress, &EchoService{}) // 改动此处服务类型
-	s, err := NewService(registryAddress, &StreamService{}) // 改动此处服务类型
+	s, err := NewService(registryAddress, &EchoService{}) // 改动此处服务类型
+	// s, err := NewService(registryAddress, &StreamService{}) // 改动此处服务类型
 	if err != nil {
 		log.Panicf("new service err")
 	}

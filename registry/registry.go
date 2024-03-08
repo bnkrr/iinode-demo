@@ -42,7 +42,7 @@ func (s *RegistryServer) Run() {
 	}
 	defer conn.Close()
 	runnerClient := pb.NewServiceClient(conn)
-	resp, err := runnerClient.Call(context.Background(), &pb.ServiceCallRequest{Input: "something"})
+	resp, err := runnerClient.Call(context.Background(), &pb.ServiceCallRequest{Input: "1.2.3.4"})
 	if err != nil {
 		log.Printf("call err, try again later: %v\n", err)
 	} else {
@@ -67,7 +67,7 @@ func (s *RegistryServer) RunStream() {
 				break
 			}
 			if err != nil {
-				log.Fatalf("%v.ListFeatures(_) = _, %v", runnerClient, err)
+				log.Fatalf("%v.CallStream, %v", runnerClient, err)
 			}
 			log.Printf("output: %s\n", resp.Output)
 		}

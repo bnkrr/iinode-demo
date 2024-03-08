@@ -15,7 +15,7 @@ type StreamService struct{}
 
 // 服务名称
 func (s *StreamService) Name() string {
-	return "EchoService"
+	return "StreamService"
 }
 
 // 服务版本

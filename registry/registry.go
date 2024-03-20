@@ -7,15 +7,12 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
-	"io"
 	"log"
 	"net"
-	"time"
+	"sync"
 
 	pb "github.com/bnkrr/iinode-demo/pb_autogen"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -24,13 +21,46 @@ const (
 
 var (
 	registryAddress = flag.String("addr", "localhost:48001", "Listen address in the format of host:port")
+	configPath      = flag.String("config", "config_example.json", "configuration path of registry")
 )
+
+type LocalService struct {
+	Name         string // 用于存储service的名称
+	Port         int    // 用于存储service的端口
+	ReturnStream bool   // 用户存储service是否是流服务
+	Concurrency  int    // 用户存储service的并发
+}
+
+func (s *LocalService) Same(other *LocalService) bool {
+	return s.Name == other.Name &&
+		s.Port == other.Port &&
+		s.Concurrency == other.Concurrency &&
+		s.ReturnStream == other.ReturnStream
+}
 
 // RegistryServer 供调试的注册服务器demo
 type RegistryServer struct {
-	pb.UnimplementedRegistryServer      // 来自rpc生成代码
-	servicePort                    int  // 用于存储service的端口
-	returnStream                   bool // 用户存储service是否是流服务
+	pb.UnimplementedRegistryServer // 来自rpc生成代码
+	config                         *ConfigRunners
+	services                       map[string](*LocalService)
+	runners                        map[string](*Runner)
+	registerLock                   sync.Mutex
+}
+
+// 查看service是否需要被运行，如果需要的话就运行
+func (s *RegistryServer) CheckRunner(service *LocalService) {
+	configService, ok := s.config.GetConfig(service)
+	if !ok {
+		return
+	}
+	oldRunner, ok := s.runners[service.Name]
+	if ok {
+		oldRunner.Stop()
+	}
+	runner := NewRunner(service, configService)
+	s.runners[service.Name] = runner
+	runner.Start()
+	runner.Serve()
 }
 
 // @title        RegisterService
@@ -40,71 +70,49 @@ type RegistryServer struct {
 // @param        req   *pb.RegisterServiceRequest   服务注册请求的rpc生成类型，内含服务各项信息，比如端口、是否是流调用等等。
 // @return       *pb.RegisterServiceResponse   服务注册响应的rpc生成类型
 func (s *RegistryServer) RegisterService(ctx context.Context, req *pb.RegisterServiceRequest) (*pb.RegisterServiceResponse, error) {
+	s.registerLock.Lock()
+	defer s.registerLock.Unlock()
+
 	log.Printf("%s listen at localhost:%d\n", req.Name, req.Port)
-	s.servicePort = int(req.Port)
-	s.returnStream = req.ReturnStream
-	return &pb.RegisterServiceResponse{Message: "success"}, nil
+	newService := &LocalService{
+		Name:         req.Name,
+		Port:         int(req.Port),
+		Concurrency:  int(req.Concurrency),
+		ReturnStream: req.ReturnStream,
+	}
+
+	msg := "kept"
+	oldService, ok := s.services[req.Name]
+	if !(ok && oldService.Same(newService)) {
+		msg = "updated"
+		go s.CheckRunner(newService)
+	}
+	s.services[req.Name] = newService
+
+	return &pb.RegisterServiceResponse{Message: msg}, nil
 }
 
-// @title        Run
-// @description  调用注册service提供的普通函数调用接口
-// @auth         dlchang (2024/03/14 16:30)
-func (s *RegistryServer) Run() {
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", s.servicePort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+func (s *RegistryServer) Serve() {
+	listener, err := net.Listen(Network, *registryAddress)
 	if err != nil {
-		log.Panicf("dial net.Connect err: %v", err)
+		log.Panicf("net.Listen err: %v", err)
 	}
-	defer conn.Close()
-	runnerClient := pb.NewServiceClient(conn)
-	resp, err := runnerClient.Call(context.Background(), &pb.ServiceCallRequest{Input: "1.2.3.4"})
-	if err != nil {
-		log.Printf("call err, try again later: %v\n", err)
-	} else {
-		log.Printf("output: %s\n", resp.Output)
-	}
+	log.Printf("registry listen at %s\n", *registryAddress)
+
+	grpcServer := grpc.NewServer()
+	pb.RegisterRegistryServer(grpcServer, s)
+	grpcServer.Serve(listener)
 }
 
-// @title        RunStream
-// @description  调用注册service提供的返回流的调用接口
-// @auth         dlchang (2024/03/14 16:30)
-func (s *RegistryServer) RunStream() {
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", s.servicePort), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Panicf("dial net.Connect err: %v", err)
-	}
-	defer conn.Close()
-	runnerClient := pb.NewServiceClient(conn)
-	stream, err := runnerClient.CallStream(context.Background(), &pb.ServiceCallRequest{Input: "something"})
-	if err != nil {
-		log.Printf("call err, try again later: %v\n", err)
-	} else {
-		for {
-			resp, err := stream.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				log.Fatalf("%v.CallStream, %v", runnerClient, err)
-			}
-			log.Printf("output: %s\n", resp.Output)
-		}
-	}
-}
+func NewRegistryServer() *RegistryServer {
+	config := &ConfigRunners{}
+	config.LoadConfigFromFile(*configPath)
 
-// @title        RunRoutine
-// @description  根据service提供的调用类型，定期调用注册service提供的调用接口
-// @auth         dlchang (2024/03/14 16:30)
-func (s *RegistryServer) RunRoutine() {
-	for {
-		if s.servicePort < 0 {
-			continue
-		}
-		if s.returnStream {
-			s.RunStream()
-		} else {
-			s.Run()
-		}
-		time.Sleep(3 * time.Second)
+	return &RegistryServer{
+		config:       config,
+		services:     make(map[string]*LocalService),
+		runners:      make(map[string]*Runner),
+		registerLock: sync.Mutex{},
 	}
 }
 
@@ -113,15 +121,8 @@ func (s *RegistryServer) RunRoutine() {
 // @auth         dlchang (2024/03/14 16:30)
 func main() {
 	flag.Parse()
-	listener, err := net.Listen(Network, *registryAddress)
-	if err != nil {
-		log.Panicf("net.Listen err: %v", err)
-	}
-	log.Printf("registry listen at %s\n", *registryAddress)
 
-	grpcServer := grpc.NewServer()
-	regServer := RegistryServer{servicePort: -1}
-	go regServer.RunRoutine()
-	pb.RegisterRegistryServer(grpcServer, &regServer)
-	grpcServer.Serve(listener)
+	r := NewRegistryServer()
+	r.Serve()
+
 }

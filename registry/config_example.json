@@ -1,0 +1,10 @@
+{
+    "services": [
+        {
+            "name": "EchoService"
+        },
+        {
+            "name": "StreamService"
+        }
+    ]
+}

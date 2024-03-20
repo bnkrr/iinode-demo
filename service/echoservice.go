@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"time"
 
 	pb "github.com/bnkrr/iinode-demo/pb_autogen"
 )
@@ -24,7 +25,7 @@ func (s *EchoService) Version() string {
 
 // 服务运行的并发
 func (s *EchoService) Concurrency() int32 {
-	return 1
+	return 10
 }
 
 // 返回是否是一个流
@@ -38,6 +39,7 @@ func (s *EchoService) ReturnStream() bool {
 // 输出结构体ServiceCallResponse有一个数据成员Output，是一个字符串（JSON）
 func (s *EchoService) Call(ctx context.Context, req *pb.ServiceCallRequest) (*pb.ServiceCallResponse, error) {
 	log.Printf("echo request: %s\n", req.Input)
+	time.Sleep(time.Duration(567) * time.Microsecond)
 	return &pb.ServiceCallResponse{Output: req.Input}, nil
 }
 

@@ -20,6 +20,6 @@ python -m grpc_tools.protoc -Ipb=../proto --python_out=. \
 
 1. 运行golang版本的registry
 2. 更改`echo_service.py`的代码，实现`Call()`函数。
-3. 运行`python echo_service.py`
+3. 运行`python echo_service.py localhost:xxxx`，其中`xxxx`是registry端口号。
 
 流的实现类似，可参考`stream_service.py`

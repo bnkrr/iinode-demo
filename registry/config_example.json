@@ -1,10 +1,18 @@
 {
     "services": [
         {
-            "name": "EchoService"
+            "name": "EchoService",
+            "mq-url": "amqp://user:password@localhost:5672/vhost",
+            "input-queue": "input-test",
+            "output-exchange": "ex-test",
+            "output-routing-key": "output"
         },
         {
-            "name": "StreamService"
+            "name": "StreamService",
+            "mq-url": "amqp://user:password@localhost:5672/vhost",
+            "input-queue": "input-test",
+            "output-exchange": "ex-test",
+            "output-routing-key": "output"
         }
     ]
 }

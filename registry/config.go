@@ -6,7 +6,11 @@ import (
 )
 
 type ConfigRunner struct {
-	Name string `json:"name"`
+	Name             string `json:"name"`
+	MqUrl            string `json:"mq-url"`
+	InputQueue       string `json:"input-queue"`
+	OutputExchange   string `json:"output-exchange"`
+	OutputRoutingKey string `json:"output-routing-key"`
 }
 
 type ConfigRunners struct {

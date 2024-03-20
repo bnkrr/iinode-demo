@@ -6,7 +6,7 @@
 
 * `service` 文件夹下是测量工具demo，更改以实现不同测量功能。
 * `service-py` 文件夹下是测量工具的python版demo，更改以实现不同测量功能。
-* `registry` 文件夹下是注册中心demo，支持服务注册，会持续调用已注册的服务。调试用。
+* `registry` 文件夹下是注册中心demo，支持服务注册，支持读取队列输入并调用已注册的服务。调试用。
 * `proto` 文件夹下是protobuf数据结构，无需更改。
 * `pb_autogen` 文件夹下是protobuf相关生成go代码，无需更改。
 
@@ -17,7 +17,7 @@
 
 运行registry：
 ```shell
-go run registry/*.go --addr localhost:56789
+go run registry/*.go --addr localhost:56789 --config registry/config_example.json
 ```
 
 同时运行service：
@@ -29,11 +29,36 @@ go run service/*.go --reg-addr localhost:56789
 
 ## 高级
 
+### protobuf代码生成
+
 * `make pb_gen` 生成protobuf相关go代码
 * `make reg` 生成registry二进制文件
 * `make srv` 生成service二进制文件
 
 细节可查看`Makefile`
+
+### registry 配置
+可按照`registry/config_example.json`编写配置，以使得registry可以接入队列，根据队列输入输出调用service
+```json
+{
+    "services": [
+        {
+            "name": "EchoService",  //服务名称
+            "mq-url": "amqp://user:password@localhost:5672/vhost", // MQ队列信息
+            "input-queue": "input-test", // 输入队列名称
+            "output-exchange": "ex-test", // 输出exchange名称
+            "output-routing-key": "output" // 输出routing key名称（如exchange为空，则为输出队列名称）
+        },
+        {
+            "name": "StreamService",
+            "mq-url": "amqp://user:password@localhost:5672/vhost",
+            "input-queue": "input-test",
+            "output-exchange": "ex-test",
+            "output-routing-key": "output"
+        }
+    ]
+}
+```
 
 ## Q&A
 
@@ -45,3 +70,9 @@ A: 更改`service/echoservice.go`中`Call()`的实现。
 
 Q: 我能写Python吗？
 A: 什么语言都可以，只要能实现gRPC的接口即可。Python版demo可以见目录`service-py/`。
+
+## changelog
+```
+20240320
+增加registry调用队列功能，如不需要可暂不更新
+```

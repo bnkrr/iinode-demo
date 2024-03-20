@@ -57,7 +57,10 @@ func (s *RegistryServer) CheckRunner(service *LocalService) {
 	if ok {
 		oldRunner.Stop()
 	}
-	runner := NewRunner(service, configService)
+	runner, err := NewRunner(service, configService)
+	if err != nil {
+		log.Panicf("err when creating runner, %v\n", err)
+	}
 	s.runners[service.Name] = runner
 	runner.Start()
 	runner.Serve()

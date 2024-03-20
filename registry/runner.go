@@ -18,17 +18,34 @@ type Runner struct {
 	port          int
 	concurrency   int
 	callType      int
+	config        *ConfigRunner
 	inputChannel  chan string
 	outputChannel chan string
 	cancel        context.CancelFunc
 	wgroup        *sync.WaitGroup
 	serviceClient pb.ServiceClient
+	mqClient      *MQClient
 }
 
 func (r *Runner) Serve() error {
+	log.Println("started")
 	r.wgroup.Wait()
-	log.Println("stopped.")
+	log.Println("stopped")
 	return nil
+}
+
+func (r *Runner) InputWorker() {
+	// r.wgroup.Add(1)  // already added outside
+	defer r.wgroup.Done()
+
+	msgChannel, err := r.mqClient.GetInputQueue(r.config.InputQueue)
+	if err != nil {
+		log.Panicf("%v", err)
+	}
+	for msg := range msgChannel {
+		input := string(msg.Body)
+		r.inputChannel <- input
+	}
 }
 
 func (r *Runner) Worker(ctx context.Context, wid int) error {
@@ -49,18 +66,17 @@ func (r *Runner) OutputWorker() error {
 	r.wgroup.Add(1)
 	defer r.wgroup.Done()
 
+	err := r.mqClient.CheckOutputQueue(r.config.OutputExchange, r.config.OutputRoutingKey)
+	if err != nil {
+		log.Fatalf("cannot connect to output queue, %v", err)
+	}
 	for output := range r.outputChannel {
+		err = r.mqClient.Publish(r.config.OutputExchange, r.config.OutputRoutingKey, output)
+		if err != nil {
+			log.Printf("publish error, %v", err)
+		}
 		log.Printf("output: %s\n", output)
 	}
-	return nil
-}
-
-func (r *Runner) NewServiceClient() error {
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", r.port), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return err
-	}
-	r.serviceClient = pb.NewServiceClient(conn)
 	return nil
 }
 
@@ -100,24 +116,16 @@ func (r *Runner) CallStream(ctx context.Context, input string) {
 	}
 }
 
-func (r *Runner) TestInputWorker(cnt int) error {
-	r.wgroup.Add(1)
-	defer r.wgroup.Done()
-
-	for i := 1; i < cnt; i++ {
-		r.inputChannel <- fmt.Sprintf("task %v", i)
-	}
-	return nil
-}
-
 func (r *Runner) Start() error {
 	r.wgroup = &sync.WaitGroup{}
+	r.wgroup.Add(1) // add one here, in case waitgroup wait ends unexpectedly
+
 	ctx, cancel := context.WithCancel(context.Background())
 
+	go r.InputWorker()
 	for i := 1; i <= r.concurrency; i++ {
 		go r.Worker(ctx, i)
 	}
-	go r.TestInputWorker(100)
 	go r.OutputWorker()
 
 	r.cancel = cancel
@@ -132,21 +140,41 @@ func (r *Runner) Stop() error {
 	return nil
 }
 
-func NewRunner(s *LocalService, c *ConfigRunner) *Runner {
+func NewServiceClient(url string) (pb.ServiceClient, error) {
+	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, err
+	}
+	return pb.NewServiceClient(conn), nil
+}
+
+func NewRunner(s *LocalService, c *ConfigRunner) (*Runner, error) {
 	callType := 0
 	if s.ReturnStream {
 		callType = 2
 	} else {
 		callType = 1
 	}
+
+	mqClient, err := NewMQClient(c.MqUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	rpcClient, err := NewServiceClient(fmt.Sprintf("localhost:%d", s.Port))
+	if err != nil {
+		return nil, err
+	}
 	r := &Runner{
 		name:          s.Name,
 		port:          s.Port,
 		concurrency:   s.Concurrency,
 		callType:      callType,
-		inputChannel:  make(chan string, 1000),
+		config:        c,
+		inputChannel:  make(chan string),
 		outputChannel: make(chan string, 1000),
+		mqClient:      mqClient,
+		serviceClient: rpcClient,
 	}
-	r.NewServiceClient()
-	return r
+	return r, nil
 }

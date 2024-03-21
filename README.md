@@ -53,7 +53,7 @@ go run registry/*.go --addr localhost:56789 --config registry/config_example.jso
   - 通过`mq-url`指定RabbitMQ服务器的配置。
   - 通过`mq-***`指定输入、输出队列信息
 
-```json
+```jsonc
 {
     "services": [
         {

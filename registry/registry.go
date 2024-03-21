@@ -84,6 +84,7 @@ func (s *RegistryServer) RegisterService(ctx context.Context, req *pb.RegisterSe
 		ReturnStream: req.ReturnStream,
 	}
 
+	// 检查信息是否更改，如果是新的服务则需要运行
 	msg := "kept"
 	oldService, ok := s.services[req.Name]
 	if !(ok && oldService.Same(newService)) {

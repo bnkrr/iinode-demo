@@ -2,17 +2,20 @@
     "services": [
         {
             "name": "EchoService",
-            "mq-url": "amqp://user:password@localhost:5672/vhost",
-            "input-queue": "input-test",
-            "output-exchange": "ex-test",
-            "output-routing-key": "output"
+            "io-type": "file",
+            "file-input-path": "path/to/input_example.txt",
+            "file-output-path": "path/to/output_example.txt",
+            "file-restart-count": 0,
+            "file-restart-interval": 5
         },
         {
             "name": "StreamService",
+            "io-type": "mq",
             "mq-url": "amqp://user:password@localhost:5672/vhost",
-            "input-queue": "input-test",
-            "output-exchange": "ex-test",
-            "output-routing-key": "output"
+            "mq-input-queue": "input-test",
+            "mq-output-exchange": "ex-test",
+            "mq-output-routing-key": "output"
         }
+        
     ]
 }

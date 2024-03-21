@@ -6,11 +6,16 @@ import (
 )
 
 type ConfigRunner struct {
-	Name             string `json:"name"`
-	MqUrl            string `json:"mq-url"`
-	InputQueue       string `json:"input-queue"`
-	OutputExchange   string `json:"output-exchange"`
-	OutputRoutingKey string `json:"output-routing-key"`
+	Name                string  `json:"name"`
+	IOType              string  `json:"io-type"`
+	MqUrl               string  `json:"mq-url"`
+	MqInputQueue        string  `json:"mq-input-queue"`
+	MqOutputExchange    string  `json:"mq-output-exchange"`
+	MqOutputRoutingKey  string  `json:"mq-output-routing-key"`
+	FileInputPath       string  `json:"file-input-path"`
+	FileOutputPath      string  `json:"file-output-path"`
+	FileRestartCount    int     `json:"file-restart-count"`
+	FileRestartInterval float32 `json:"file-restart-interval"`
 }
 
 type ConfigRunners struct {

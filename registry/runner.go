@@ -13,71 +13,34 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+type IOConnecter interface {
+	InputChannel(context.Context) chan string
+	OutputChannel(context.Context) chan string
+}
+
 type Runner struct {
 	name          string
 	port          int
 	concurrency   int
 	callType      int
 	config        *ConfigRunner
-	inputChannel  chan string
-	outputChannel chan string
 	cancel        context.CancelFunc
 	wgroup        *sync.WaitGroup
 	serviceClient pb.ServiceClient
-	mqClient      *MQClient
-}
-
-func (r *Runner) Serve() error {
-	log.Println("started")
-	r.wgroup.Wait()
-	log.Println("stopped")
-	return nil
-}
-
-func (r *Runner) InputWorker() {
-	// r.wgroup.Add(1)  // already added outside
-	defer r.wgroup.Done()
-
-	msgChannel, err := r.mqClient.GetInputQueue(r.config.InputQueue)
-	if err != nil {
-		log.Panicf("%v", err)
-	}
-	for msg := range msgChannel {
-		input := string(msg.Body)
-		r.inputChannel <- input
-	}
+	ioconn        IOConnecter
 }
 
 func (r *Runner) Worker(ctx context.Context, wid int) error {
-	r.wgroup.Add(1)
 	defer r.wgroup.Done()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case input := <-r.inputChannel:
+		case input := <-r.ioconn.InputChannel(ctx):
 			r.CallGeneric(ctx, input)
 		}
 	}
-}
-
-func (r *Runner) OutputWorker() error {
-	r.wgroup.Add(1)
-	defer r.wgroup.Done()
-
-	err := r.mqClient.CheckOutputQueue(r.config.OutputExchange, r.config.OutputRoutingKey)
-	if err != nil {
-		log.Fatalf("cannot connect to output queue, %v", err)
-	}
-	for output := range r.outputChannel {
-		err = r.mqClient.Publish(r.config.OutputExchange, r.config.OutputRoutingKey, output)
-		if err != nil {
-			log.Printf("publish error, %v", err)
-		}
-		log.Printf("output: %s\n", output)
-	}
-	return nil
 }
 
 func (r *Runner) CallGeneric(ctx context.Context, input string) {
@@ -94,7 +57,7 @@ func (r *Runner) Call(ctx context.Context, input string) {
 	if err != nil {
 		log.Printf("call err, try again later: %v\n", err)
 	} else {
-		r.outputChannel <- resp.Output
+		r.ioconn.OutputChannel(ctx) <- resp.Output
 	}
 }
 
@@ -111,22 +74,32 @@ func (r *Runner) CallStream(ctx context.Context, input string) {
 			if err != nil {
 				log.Fatalf("%v.CallStream, %v", r.serviceClient, err)
 			}
-			r.outputChannel <- resp.Output
+			r.ioconn.OutputChannel(ctx) <- resp.Output
 		}
 	}
 }
 
 func (r *Runner) Start() error {
 	r.wgroup = &sync.WaitGroup{}
-	r.wgroup.Add(1) // add one here, in case waitgroup wait ends unexpectedly
+	r.wgroup.Add(r.concurrency) // add one here, in case waitgroup wait ends unexpectedly
+
+	var ioconn IOConnecter
+	var err error
+	if r.config.IOType == "mq" {
+		ioconn, err = NewIOConnectorMQ(r.config, r.wgroup)
+	} else {
+		ioconn, err = NewIOConnectorFile(r.config, r.wgroup)
+	}
+	if err != nil {
+		return err
+	}
+	r.ioconn = ioconn
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go r.InputWorker()
 	for i := 1; i <= r.concurrency; i++ {
 		go r.Worker(ctx, i)
 	}
-	go r.OutputWorker()
 
 	r.cancel = cancel
 	return nil
@@ -137,6 +110,13 @@ func (r *Runner) Stop() error {
 		return errors.New("no cancel function")
 	}
 	r.cancel()
+	return nil
+}
+
+func (r *Runner) Serve() error {
+	log.Println("started")
+	r.wgroup.Wait()
+	log.Println("stopped")
 	return nil
 }
 
@@ -156,11 +136,6 @@ func NewRunner(s *LocalService, c *ConfigRunner) (*Runner, error) {
 		callType = 1
 	}
 
-	mqClient, err := NewMQClient(c.MqUrl)
-	if err != nil {
-		return nil, err
-	}
-
 	rpcClient, err := NewServiceClient(fmt.Sprintf("localhost:%d", s.Port))
 	if err != nil {
 		return nil, err
@@ -171,9 +146,6 @@ func NewRunner(s *LocalService, c *ConfigRunner) (*Runner, error) {
 		concurrency:   s.Concurrency,
 		callType:      callType,
 		config:        c,
-		inputChannel:  make(chan string),
-		outputChannel: make(chan string, 1000),
-		mqClient:      mqClient,
 		serviceClient: rpcClient,
 	}
 	return r, nil

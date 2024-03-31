@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"net"
@@ -25,26 +26,25 @@ var (
 )
 
 type LocalService struct {
-	Name         string // 用于存储service的名称
-	Port         int    // 用于存储service的端口
-	ReturnStream bool   // 用户存储service是否是流服务
-	Concurrency  int    // 用户存储service的并发
+	Name        string      // 用于存储service的名称
+	Port        int         // 用于存储service的端口
+	CallType    pb.CallType // 用户存储service的调用类型
+	Concurrency int         // 用户存储service的并发
 }
 
 func (s *LocalService) Same(other *LocalService) bool {
 	return s.Name == other.Name &&
 		s.Port == other.Port &&
 		s.Concurrency == other.Concurrency &&
-		s.ReturnStream == other.ReturnStream
+		s.CallType == other.CallType
 }
 
 // RegistryServer 供调试的注册服务器demo
 type RegistryServer struct {
 	pb.UnimplementedRegistryServer // 来自rpc生成代码
 	config                         *ConfigRunners
-	services                       map[string](*LocalService)
-	runners                        map[string](*Runner)
-	registerLock                   sync.Mutex
+	services                       sync.Map
+	runners                        sync.Map
 }
 
 // 查看service是否需要被运行，如果需要的话就运行
@@ -53,17 +53,37 @@ func (s *RegistryServer) CheckRunner(service *LocalService) {
 	if !ok {
 		return
 	}
-	oldRunner, ok := s.runners[service.Name]
+
+	oldRunner, ok := s.runners.Load(service.Name)
 	if ok {
-		oldRunner.Stop()
+		r, ok := oldRunner.(*Runner)
+		if !ok {
+			log.Panic("err when loading runner")
+		}
+		r.Stop()
 	}
+
 	runner, err := NewRunner(service, configService)
 	if err != nil {
 		log.Panicf("err when creating runner, %v\n", err)
 	}
-	s.runners[service.Name] = runner
+	s.runners.Store(service.Name, runner)
+
 	runner.Start()
 	runner.Serve()
+}
+
+// 检查一个service是否已存在
+func (s *RegistryServer) ServiceExists(service *LocalService) (bool, error) {
+	oldServiceAny, ok := s.services.Load(service.Name)
+	if !ok {
+		return false, nil
+	}
+	oldService, ok := oldServiceAny.(*LocalService)
+	if !ok {
+		return false, errors.New("load service err")
+	}
+	return oldService.Same(service), nil
 }
 
 // @title        RegisterService
@@ -73,27 +93,40 @@ func (s *RegistryServer) CheckRunner(service *LocalService) {
 // @param        req   *pb.RegisterServiceRequest   服务注册请求的rpc生成类型，内含服务各项信息，比如端口、是否是流调用等等。
 // @return       *pb.RegisterServiceResponse   服务注册响应的rpc生成类型
 func (s *RegistryServer) RegisterService(ctx context.Context, req *pb.RegisterServiceRequest) (*pb.RegisterServiceResponse, error) {
-	s.registerLock.Lock()
-	defer s.registerLock.Unlock()
-
 	log.Printf("%s listen at localhost:%d\n", req.Name, req.Port)
 	newService := &LocalService{
-		Name:         req.Name,
-		Port:         int(req.Port),
-		Concurrency:  int(req.Concurrency),
-		ReturnStream: req.ReturnStream,
+		Name:        req.Name,
+		Port:        int(req.Port),
+		Concurrency: int(req.Concurrency),
+		CallType:    req.CallType,
 	}
 
 	// 检查信息是否更改，如果是新的服务则需要运行
 	msg := "kept"
-	oldService, ok := s.services[req.Name]
-	if !(ok && oldService.Same(newService)) {
+	exists, err := s.ServiceExists(newService)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
 		msg = "updated"
 		go s.CheckRunner(newService)
+		s.services.Store(req.Name, newService)
 	}
-	s.services[req.Name] = newService
 
 	return &pb.RegisterServiceResponse{Message: msg}, nil
+}
+
+func (s *RegistryServer) SubmitResult(ctx context.Context, req *pb.SubmitResultRequest) (*pb.SubmitResultResponse, error) {
+	runner, ok := s.runners.Load(req.Name)
+	if !ok {
+		return nil, errors.New("runner not found")
+	}
+	r, ok := runner.(*Runner)
+	if !ok {
+		return nil, errors.New("runner loading error")
+	}
+	r.ReceiveResult(req)
+	return &pb.SubmitResultResponse{Message: "success"}, nil
 }
 
 func (s *RegistryServer) Serve() {
@@ -113,10 +146,9 @@ func NewRegistryServer() *RegistryServer {
 	config.LoadConfigFromFile(*configPath)
 
 	return &RegistryServer{
-		config:       config,
-		services:     make(map[string]*LocalService),
-		runners:      make(map[string]*Runner),
-		registerLock: sync.Mutex{},
+		config:   config,
+		services: sync.Map{},
+		runners:  sync.Map{},
 	}
 }
 

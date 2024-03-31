@@ -29,8 +29,8 @@ func (s *EchoService) Concurrency() int32 {
 }
 
 // 返回是否是一个流
-func (s *EchoService) ReturnStream() bool {
-	return false
+func (s *EchoService) CallType() pb.CallType {
+	return pb.CallType_NORMAL
 }
 
 // 服务的函数体，更改它实现具体的测量功能
@@ -46,4 +46,9 @@ func (s *EchoService) Call(ctx context.Context, req *pb.ServiceCallRequest) (*pb
 // 直接调用服务，无需实现stream方法
 func (s *EchoService) CallStream(req *pb.ServiceCallRequest, stream pb.Service_CallStreamServer) error {
 	return errors.New("not implemented")
+}
+
+// 直接调用服务，无需实现async方法
+func (s *EchoService) CallAsync(ctx context.Context, req *pb.ServiceCallRequest) (*pb.ServiceCallResponse, error) {
+	return nil, errors.New("not implemented")
 }

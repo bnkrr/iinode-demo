@@ -22,31 +22,35 @@ type Runner struct {
 	name          string
 	port          int
 	concurrency   int
-	callType      int
+	callType      pb.CallType
 	config        *ConfigRunner
 	cancel        context.CancelFunc
 	wgroup        *sync.WaitGroup
 	serviceClient pb.ServiceClient
 	ioconn        IOConnecter
+	callEndChn    map[int](chan struct{})
 }
 
 func (r *Runner) Worker(ctx context.Context, wid int) error {
 	defer r.wgroup.Done()
+	_ = r.ioconn.OutputChannel(ctx)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case input := <-r.ioconn.InputChannel(ctx):
-			r.CallGeneric(ctx, input)
+			r.CallGeneric(ctx, wid, input)
 		}
 	}
 }
 
-func (r *Runner) CallGeneric(ctx context.Context, input string) {
+func (r *Runner) CallGeneric(ctx context.Context, wid int, input string) {
 	// call
-	if r.callType == 2 {
+	if r.callType == pb.CallType_STREAM {
 		r.CallStream(ctx, input)
+	} else if r.callType == pb.CallType_ASYNC {
+		r.CallAsync(ctx, wid, input)
 	} else {
 		r.Call(ctx, input)
 	}
@@ -79,6 +83,34 @@ func (r *Runner) CallStream(ctx context.Context, input string) {
 	}
 }
 
+func (r *Runner) CallAsync(ctx context.Context, wid int, input string) {
+	resp, err := r.serviceClient.CallAsync(ctx, &pb.ServiceCallRequest{RequestId: int32(wid), Input: input})
+	if err != nil {
+		log.Printf("call err, try again later: %v\n", err)
+		return
+	} else {
+		log.Printf("async call (id:%v), %v\n", wid, resp.Output)
+	}
+	ch, ok := r.callEndChn[wid]
+	if !ok {
+		log.Panicf("err find channel, %v\n", wid)
+	}
+	<-ch
+}
+
+func (r *Runner) ReceiveResult(req *pb.SubmitResultRequest) {
+	// 无法获取初始化时的context，所以要提前初始化output channel
+	r.ioconn.OutputChannel(context.Background()) <- req.GetOutput()
+	if req.GetEnd() {
+		wid := int(req.RequestId)
+		ch, ok := r.callEndChn[wid]
+		if !ok {
+			log.Panicf("err find channel %v", wid)
+		}
+		ch <- struct{}{}
+	}
+}
+
 func (r *Runner) Start() error {
 	r.wgroup = &sync.WaitGroup{}
 	r.wgroup.Add(r.concurrency) // add one here, in case waitgroup wait ends unexpectedly
@@ -98,6 +130,7 @@ func (r *Runner) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	for i := 1; i <= r.concurrency; i++ {
+		r.callEndChn[i] = make(chan struct{})
 		go r.Worker(ctx, i)
 	}
 
@@ -129,13 +162,6 @@ func NewServiceClient(url string) (pb.ServiceClient, error) {
 }
 
 func NewRunner(s *LocalService, c *ConfigRunner) (*Runner, error) {
-	callType := 0
-	if s.ReturnStream {
-		callType = 2
-	} else {
-		callType = 1
-	}
-
 	rpcClient, err := NewServiceClient(fmt.Sprintf("localhost:%d", s.Port))
 	if err != nil {
 		return nil, err
@@ -144,9 +170,10 @@ func NewRunner(s *LocalService, c *ConfigRunner) (*Runner, error) {
 		name:          s.Name,
 		port:          s.Port,
 		concurrency:   s.Concurrency,
-		callType:      callType,
+		callType:      s.CallType,
 		config:        c,
 		serviceClient: rpcClient,
+		callEndChn:    make(map[int]chan struct{}),
 	}
 	return r, nil
 }

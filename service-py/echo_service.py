@@ -5,6 +5,7 @@ import sys
 import grpc
 
 import pb.service_pb2 as service_pb2
+import pb.registry_pb2 as registry_pb2
 from base_service import BaseService
 from service_common import ServiceInstance
 
@@ -13,7 +14,7 @@ class EchoService(BaseService):
         self.name = 'EchoService'
         self.version = '1.0.0'
         self.concurrency = 1
-        self.return_stream = False
+        self.call_type = registry_pb2.NORMAL
         
     async def Call(self, 
             request: service_pb2.ServiceCallRequest, 

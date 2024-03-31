@@ -7,12 +7,15 @@ option go_package = "github.com/bnkrr/iinode-demo/pb_autogen";
 service Service {
     rpc Call (ServiceCallRequest) returns (ServiceCallResponse) {}
     rpc CallStream (ServiceCallRequest) returns (stream ServiceCallResponse) {}
+    rpc CallAsync (ServiceCallRequest) returns (ServiceCallResponse) {}
 }
 
 message ServiceCallRequest {
     string input = 1;
+    int32 request_id = 2;
 }
 
 message ServiceCallResponse {
     string output = 1;
+    int32 request_id = 2;
 }

@@ -6,6 +6,7 @@ import sys
 import grpc
 
 import pb.service_pb2 as service_pb2
+import pb.registry_pb2 as registry_pb2
 from base_service import BaseService
 from service_common import ServiceInstance
 
@@ -15,7 +16,7 @@ class StreamService(BaseService):
         self.name = 'StreamService'
         self.version = '1.0.0'
         self.concurrency = 1
-        self.return_stream = True
+        self.call_type = registry_pb2.STREAM
         
     async def CallStream(self, 
             request: service_pb2.ServiceCallRequest, 

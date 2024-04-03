@@ -1,5 +1,9 @@
 package main
 
+// @Title        runner.go
+// @Description  在本地处理输入输出，同时按照配置调用local service
+// @Create       dlchang (2024/04/03 15:00)
+
 import (
 	"context"
 	"errors"

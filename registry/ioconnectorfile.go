@@ -1,5 +1,9 @@
 package main
 
+// @Title        ioconnectorfile.go
+// @Description  实现基于文件的输入输出方式（便于调试）
+// @Create       dlchang (2024/04/03 15:00)
+
 import (
 	"bufio"
 	"context"

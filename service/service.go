@@ -140,7 +140,6 @@ func NewService(registryAddress *string, service ServiceHandler) (*BaseService, 
 func main() {
 	flag.Parse()
 	s, err := NewService(registryAddress, &EchoService{}) // 改动此处服务类型
-	// s, err := NewService(registryAddress, &AsyncService{}) // 改动此处服务类型
 	// s, err := NewService(registryAddress, &StreamService{}) // 改动此处服务类型
 	if err != nil {
 		log.Panicf("new service err")

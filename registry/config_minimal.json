@@ -1,0 +1,12 @@
+{
+    "services": [
+        {
+            "name": "EchoService",
+            "io-type": "file",
+            "file-input-path": "static/input_example.txt",
+            "file-output-path": "",
+            "file-restart-count": 0,
+            "file-restart-interval": 3
+        }        
+    ]
+}

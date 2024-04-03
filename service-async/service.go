@@ -1,7 +1,7 @@
 package main
 
 // @Title        service.go
-// @Description  一个服务抽象的样例，支持自动向registry注册，并接入不同的服务实现
+// @Description  一个异步服务的样例，支持自动向registry注册，在被调用时进行测量，会通过持续调用registry接口汇报结果。
 // @Create       dlchang (2024/03/14 16:30)
 
 import (

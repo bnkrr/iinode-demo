@@ -24,10 +24,9 @@ class ServiceInstance(object):
                 port=self.port, 
                 version=self.service_handler.version, 
                 concurrency=self.service_handler.concurrency, 
-                return_stream=self.service_handler.return_stream)
+                call_type=self.service_handler.call_type)
             await stub.RegisterService(service)
 
-            
     async def register_routine(self):
         while True:
             await asyncio.sleep(5)

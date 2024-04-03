@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11pb/registry.proto\x12\npb_autogen\"q\n\x16RegisterServiceRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04port\x18\x02 \x01(\x05\x12\x0f\n\x07version\x18\x03 \x01(\t\x12\x13\n\x0b\x63oncurrency\x18\x04 \x01(\x05\x12\x15\n\rreturn_stream\x18\x05 \x01(\x08\"*\n\x17RegisterServiceResponse\x12\x0f\n\x07message\x18\x01 \x01(\t2h\n\x08Registry\x12\\\n\x0fRegisterService\x12\".pb_autogen.RegisterServiceRequest\x1a#.pb_autogen.RegisterServiceResponse\"\x00\x42)Z\'github.com/bnkrr/iinode-demo/pb_autogenb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11pb/registry.proto\x12\npb_autogen\"\x83\x01\n\x16RegisterServiceRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04port\x18\x02 \x01(\x05\x12\x0f\n\x07version\x18\x03 \x01(\t\x12\x13\n\x0b\x63oncurrency\x18\x04 \x01(\x05\x12\'\n\tcall_type\x18\x05 \x01(\x0e\x32\x14.pb_autogen.CallType\"*\n\x17RegisterServiceResponse\x12\x0f\n\x07message\x18\x01 \x01(\t\"T\n\x13SubmitResultRequest\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x12\n\nrequest_id\x18\x02 \x01(\x05\x12\x0b\n\x03\x65nd\x18\x03 \x01(\x08\x12\x0e\n\x06output\x18\x04 \x01(\t\"\'\n\x14SubmitResultResponse\x12\x0f\n\x07message\x18\x01 \x01(\t*-\n\x08\x43\x61llType\x12\n\n\x06NORMAL\x10\x00\x12\n\n\x06STREAM\x10\x01\x12\t\n\x05\x41SYNC\x10\x02\x32\xbd\x01\n\x08Registry\x12\\\n\x0fRegisterService\x12\".pb_autogen.RegisterServiceRequest\x1a#.pb_autogen.RegisterServiceResponse\"\x00\x12S\n\x0cSubmitResult\x12\x1f.pb_autogen.SubmitResultRequest\x1a .pb_autogen.SubmitResultResponse\"\x00\x42)Z\'github.com/bnkrr/iinode-demo/pb_autogenb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -22,10 +22,16 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'pb.registry_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['DESCRIPTOR']._options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z\'github.com/bnkrr/iinode-demo/pb_autogen'
-  _globals['_REGISTERSERVICEREQUEST']._serialized_start=33
-  _globals['_REGISTERSERVICEREQUEST']._serialized_end=146
-  _globals['_REGISTERSERVICERESPONSE']._serialized_start=148
-  _globals['_REGISTERSERVICERESPONSE']._serialized_end=190
-  _globals['_REGISTRY']._serialized_start=192
-  _globals['_REGISTRY']._serialized_end=296
+  _globals['_CALLTYPE']._serialized_start=338
+  _globals['_CALLTYPE']._serialized_end=383
+  _globals['_REGISTERSERVICEREQUEST']._serialized_start=34
+  _globals['_REGISTERSERVICEREQUEST']._serialized_end=165
+  _globals['_REGISTERSERVICERESPONSE']._serialized_start=167
+  _globals['_REGISTERSERVICERESPONSE']._serialized_end=209
+  _globals['_SUBMITRESULTREQUEST']._serialized_start=211
+  _globals['_SUBMITRESULTREQUEST']._serialized_end=295
+  _globals['_SUBMITRESULTRESPONSE']._serialized_start=297
+  _globals['_SUBMITRESULTRESPONSE']._serialized_end=336
+  _globals['_REGISTRY']._serialized_start=386
+  _globals['_REGISTRY']._serialized_end=575
 # @@protoc_insertion_point(module_scope)

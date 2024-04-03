@@ -5,15 +5,16 @@ import sys
 import grpc
 
 import pb.service_pb2 as service_pb2
+import pb.registry_pb2 as registry_pb2
 from base_service import BaseService
 from service_common import ServiceInstance
 
-class EchoService(BaseService):
+class EchoService(BaseService):              # 类名可修改
     def __init__(self):
-        self.name = 'EchoService'
-        self.version = '1.0.0'
-        self.concurrency = 1
-        self.return_stream = False
+        self.name = 'EchoService'            # 服务名称，需修改
+        self.version = '1.0.0'               # 服务版本
+        self.concurrency = 1                 # 服务并发（控制registry调用服务并发度，整数）
+        self.call_type = registry_pb2.NORMAL # 服务调用方式，此处为直接调用，可不用修改
         
     async def Call(self, 
             request: service_pb2.ServiceCallRequest, 

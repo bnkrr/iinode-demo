@@ -29,8 +29,8 @@ func (s *StreamService) Concurrency() int32 {
 }
 
 // 返回是否是一个流
-func (s *StreamService) ReturnStream() bool {
-	return true
+func (s *StreamService) CallType() pb.CallType {
+	return pb.CallType_STREAM
 }
 
 // 直接调用函数，实现流方法则无需实现本方法
@@ -52,4 +52,9 @@ func (s *StreamService) CallStream(req *pb.ServiceCallRequest, stream pb.Service
 		}
 	}
 	return nil
+}
+
+// 直接调用服务，无需实现async方法
+func (s *StreamService) CallAsync(ctx context.Context, req *pb.ServiceCallRequest) (*pb.ServiceCallResponse, error) {
+	return nil, errors.New("not implemented")
 }

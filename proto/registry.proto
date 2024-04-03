@@ -6,6 +6,7 @@ option go_package = "github.com/bnkrr/iinode-demo/pb_autogen";
 
 service Registry {
     rpc RegisterService (RegisterServiceRequest) returns (RegisterServiceResponse) {}
+    rpc SubmitResult (SubmitResultRequest) returns (SubmitResultResponse) {}
 }
 
 message RegisterServiceRequest {
@@ -13,9 +14,26 @@ message RegisterServiceRequest {
     int32 port = 2;
     string version = 3;
     int32 concurrency = 4;
-    bool return_stream = 5;
+    CallType call_type = 5;
 }
 
 message RegisterServiceResponse {
     string message = 1;
+}
+
+message SubmitResultRequest {
+    string name = 1;
+    int32 request_id = 2;
+    bool end = 3;
+    string output = 4;
+}
+
+message SubmitResultResponse {
+    string message = 1;
+}
+
+enum CallType {
+    NORMAL = 0;
+    STREAM = 1;
+    ASYNC = 2;
 }

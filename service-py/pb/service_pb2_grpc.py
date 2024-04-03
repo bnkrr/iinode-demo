@@ -24,6 +24,11 @@ class ServiceStub(object):
                 request_serializer=pb_dot_service__pb2.ServiceCallRequest.SerializeToString,
                 response_deserializer=pb_dot_service__pb2.ServiceCallResponse.FromString,
                 )
+        self.CallAsync = channel.unary_unary(
+                '/pb_autogen.Service/CallAsync',
+                request_serializer=pb_dot_service__pb2.ServiceCallRequest.SerializeToString,
+                response_deserializer=pb_dot_service__pb2.ServiceCallResponse.FromString,
+                )
 
 
 class ServiceServicer(object):
@@ -41,6 +46,12 @@ class ServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def CallAsync(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -51,6 +62,11 @@ def add_ServiceServicer_to_server(servicer, server):
             ),
             'CallStream': grpc.unary_stream_rpc_method_handler(
                     servicer.CallStream,
+                    request_deserializer=pb_dot_service__pb2.ServiceCallRequest.FromString,
+                    response_serializer=pb_dot_service__pb2.ServiceCallResponse.SerializeToString,
+            ),
+            'CallAsync': grpc.unary_unary_rpc_method_handler(
+                    servicer.CallAsync,
                     request_deserializer=pb_dot_service__pb2.ServiceCallRequest.FromString,
                     response_serializer=pb_dot_service__pb2.ServiceCallResponse.SerializeToString,
             ),
@@ -93,6 +109,23 @@ class Service(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_stream(request, target, '/pb_autogen.Service/CallStream',
+            pb_dot_service__pb2.ServiceCallRequest.SerializeToString,
+            pb_dot_service__pb2.ServiceCallResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def CallAsync(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/pb_autogen.Service/CallAsync',
             pb_dot_service__pb2.ServiceCallRequest.SerializeToString,
             pb_dot_service__pb2.ServiceCallResponse.FromString,
             options, channel_credentials,

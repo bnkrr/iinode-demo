@@ -1,5 +1,9 @@
 package main
 
+// @Title        ioconnectormq.go
+// @Description  实现基于MQ队列的输入输出方式（用于正式测量）
+// @Create       dlchang (2024/04/03 15:00)
+
 // todo:
 // 1. prefetch & ack
 // 2. publish & consume 使用两个connection

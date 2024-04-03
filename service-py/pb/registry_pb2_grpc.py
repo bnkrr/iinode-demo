@@ -19,12 +19,23 @@ class RegistryStub(object):
                 request_serializer=pb_dot_registry__pb2.RegisterServiceRequest.SerializeToString,
                 response_deserializer=pb_dot_registry__pb2.RegisterServiceResponse.FromString,
                 )
+        self.SubmitResult = channel.unary_unary(
+                '/pb_autogen.Registry/SubmitResult',
+                request_serializer=pb_dot_registry__pb2.SubmitResultRequest.SerializeToString,
+                response_deserializer=pb_dot_registry__pb2.SubmitResultResponse.FromString,
+                )
 
 
 class RegistryServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def RegisterService(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SubmitResult(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -37,6 +48,11 @@ def add_RegistryServicer_to_server(servicer, server):
                     servicer.RegisterService,
                     request_deserializer=pb_dot_registry__pb2.RegisterServiceRequest.FromString,
                     response_serializer=pb_dot_registry__pb2.RegisterServiceResponse.SerializeToString,
+            ),
+            'SubmitResult': grpc.unary_unary_rpc_method_handler(
+                    servicer.SubmitResult,
+                    request_deserializer=pb_dot_registry__pb2.SubmitResultRequest.FromString,
+                    response_serializer=pb_dot_registry__pb2.SubmitResultResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -62,5 +78,22 @@ class Registry(object):
         return grpc.experimental.unary_unary(request, target, '/pb_autogen.Registry/RegisterService',
             pb_dot_registry__pb2.RegisterServiceRequest.SerializeToString,
             pb_dot_registry__pb2.RegisterServiceResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def SubmitResult(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/pb_autogen.Registry/SubmitResult',
+            pb_dot_registry__pb2.SubmitResultRequest.SerializeToString,
+            pb_dot_registry__pb2.SubmitResultResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

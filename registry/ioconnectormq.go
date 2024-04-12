@@ -35,12 +35,12 @@ func (m *MQClient) CheckInputQueue(inputQueue string) error {
 
 func (m *MQClient) GetInputQueue(inputQueue string) (<-chan amqp.Delivery, error) {
 	return m.channel.Consume(
-		inputQueue,
-		"",
-		true,
-		false,
-		false,
-		false,
+		inputQueue, // queue
+		"",         // consumer
+		false,      // autoAck
+		false,      // exclusive
+		false,      // noLocal
+		false,      // noWait
 		nil,
 	)
 }
@@ -107,13 +107,25 @@ func NewMQClient(url string) (*MQClient, error) {
 	}, nil
 }
 
+type InputMessageMQ struct {
+	message amqp.Delivery
+}
+
+func (m *InputMessageMQ) Msg() string {
+	return string(m.message.Body)
+}
+
+func (m *InputMessageMQ) Ack() {
+	m.message.Ack(false)
+}
+
 type IOConnectorMQ struct {
 	mqInputOnce  sync.Once
 	mqOutputOnce sync.Once
 	wgroup       *sync.WaitGroup
 	config       *ConfigRunner
 	mqClient     *MQClient
-	inputCh      chan string
+	inputCh      chan InputMessage
 	outputCh     chan string
 }
 
@@ -127,7 +139,7 @@ func (i *IOConnectorMQ) InputInit(ctx context.Context) {
 		log.Panicf("%v", err)
 	}
 
-	i.inputCh = make(chan string)
+	i.inputCh = make(chan InputMessage)
 	i.wgroup.Add(1)
 
 	go func() {
@@ -138,14 +150,13 @@ func (i *IOConnectorMQ) InputInit(ctx context.Context) {
 				i.mqClient.Close()
 				return
 			case msg := <-msgChannel:
-				input := string(msg.Body)
-				i.inputCh <- input
+				i.inputCh <- &InputMessageMQ{message: msg}
 			}
 		}
 	}()
 }
 
-func (i *IOConnectorMQ) InputChannel(ctx context.Context) chan string {
+func (i *IOConnectorMQ) InputChannel(ctx context.Context) chan InputMessage {
 	i.mqInputOnce.Do(func() { i.InputInit(ctx) })
 	return i.inputCh
 }

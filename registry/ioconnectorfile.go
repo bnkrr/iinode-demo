@@ -14,12 +14,23 @@ import (
 	"time"
 )
 
+type InputMessageFile struct {
+	text string
+}
+
+func (m *InputMessageFile) Msg() string {
+	return m.text
+}
+
+func (m *InputMessageFile) Ack() {
+}
+
 type IOConnectorFile struct {
 	inputOnce  sync.Once
 	outputOnce sync.Once
 	wgroup     *sync.WaitGroup
 	config     *ConfigRunner
-	inputCh    chan string
+	inputCh    chan InputMessage
 	outputCh   chan string
 }
 
@@ -39,7 +50,7 @@ func (i *IOConnectorFile) InputInit(ctx context.Context) {
 		lines = append(lines, fileScanner.Text())
 	}
 
-	i.inputCh = make(chan string)
+	i.inputCh = make(chan InputMessage)
 	i.wgroup.Add(1)
 
 	go func() {
@@ -52,7 +63,7 @@ func (i *IOConnectorFile) InputInit(ctx context.Context) {
 					file.Close()
 					return
 				default:
-					i.inputCh <- line
+					i.inputCh <- &InputMessageFile{text: line}
 				}
 			}
 			if i.config.FileRestartInterval > 0 {
@@ -62,7 +73,7 @@ func (i *IOConnectorFile) InputInit(ctx context.Context) {
 	}()
 }
 
-func (i *IOConnectorFile) InputChannel(ctx context.Context) chan string {
+func (i *IOConnectorFile) InputChannel(ctx context.Context) chan InputMessage {
 	i.inputOnce.Do(func() { i.InputInit(ctx) })
 	return i.inputCh
 }

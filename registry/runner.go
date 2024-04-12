@@ -17,8 +17,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+type InputMessage interface {
+	Msg() string
+	Ack()
+}
+
 type IOConnecter interface {
-	InputChannel(context.Context) chan string
+	InputChannel(context.Context) chan InputMessage
 	OutputChannel(context.Context) chan string
 }
 
@@ -49,15 +54,16 @@ func (r *Runner) Worker(ctx context.Context, wid int) error {
 	}
 }
 
-func (r *Runner) CallGeneric(ctx context.Context, wid int, input string) {
+func (r *Runner) CallGeneric(ctx context.Context, wid int, input InputMessage) {
 	// call
 	if r.callType == pb.CallType_STREAM {
-		r.CallStream(ctx, input)
+		r.CallStream(ctx, input.Msg())
 	} else if r.callType == pb.CallType_ASYNC {
-		r.CallAsync(ctx, wid, input)
+		r.CallAsync(ctx, wid, input.Msg())
 	} else {
-		r.Call(ctx, input)
+		r.Call(ctx, input.Msg())
 	}
+	input.Ack()
 }
 
 func (r *Runner) Call(ctx context.Context, input string) {
@@ -117,7 +123,7 @@ func (r *Runner) ReceiveResult(req *pb.SubmitResultRequest) {
 
 func (r *Runner) Start() error {
 	r.wgroup = &sync.WaitGroup{}
-	r.wgroup.Add(r.concurrency) // add one here, in case waitgroup wait ends unexpectedly
+	r.wgroup.Add(r.concurrency) // add outside of go func, in case waitgroup wait ends unexpectedly
 
 	var ioconn IOConnecter
 	var err error

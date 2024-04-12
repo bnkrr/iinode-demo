@@ -23,8 +23,8 @@ type InputMessage interface {
 }
 
 type IOConnecter interface {
-	InputChannel(context.Context) chan InputMessage
-	OutputChannel(context.Context) chan string
+	SetInputChannel(context.Context, chan InputMessage)
+	SetOutputChannel(context.Context, chan string)
 }
 
 type Runner struct {
@@ -37,18 +37,20 @@ type Runner struct {
 	wgroup        *sync.WaitGroup
 	serviceClient pb.ServiceClient
 	ioconn        IOConnecter
+	inputCh       chan InputMessage
+	outputCh      chan string
 	callEndChn    map[int](chan struct{})
 }
 
 func (r *Runner) Worker(ctx context.Context, wid int) error {
 	defer r.wgroup.Done()
-	_ = r.ioconn.OutputChannel(ctx)
+	// _ = r.ioconn.OutputChannel(ctx)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case input := <-r.ioconn.InputChannel(ctx):
+		case input := <-r.inputCh:
 			r.CallGeneric(ctx, wid, input)
 		}
 	}
@@ -71,7 +73,7 @@ func (r *Runner) Call(ctx context.Context, input string) {
 	if err != nil {
 		log.Printf("call err, try again later: %v\n", err)
 	} else {
-		r.ioconn.OutputChannel(ctx) <- resp.Output
+		r.outputCh <- resp.Output
 	}
 }
 
@@ -88,7 +90,7 @@ func (r *Runner) CallStream(ctx context.Context, input string) {
 			if err != nil {
 				log.Fatalf("%v.CallStream, %v", r.serviceClient, err)
 			}
-			r.ioconn.OutputChannel(ctx) <- resp.Output
+			r.outputCh <- resp.Output
 		}
 	}
 }
@@ -110,7 +112,8 @@ func (r *Runner) CallAsync(ctx context.Context, wid int, input string) {
 
 func (r *Runner) ReceiveResult(req *pb.SubmitResultRequest) {
 	// 无法获取初始化时的context，所以要提前初始化output channel
-	r.ioconn.OutputChannel(context.Background()) <- req.GetOutput()
+	// r.ioconn.OutputChannel(context.Background()) <- req.GetOutput()
+	r.outputCh <- req.GetOutput()
 	if req.GetEnd() {
 		wid := int(req.RequestId)
 		ch, ok := r.callEndChn[wid]
@@ -138,6 +141,11 @@ func (r *Runner) Start() error {
 	r.ioconn = ioconn
 
 	ctx, cancel := context.WithCancel(context.Background())
+
+	r.inputCh = make(chan InputMessage)
+	r.ioconn.SetInputChannel(ctx, r.inputCh)
+	r.outputCh = make(chan string)
+	r.ioconn.SetOutputChannel(ctx, r.outputCh)
 
 	for i := 1; i <= r.concurrency; i++ {
 		r.callEndChn[i] = make(chan struct{})

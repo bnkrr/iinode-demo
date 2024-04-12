@@ -125,11 +125,9 @@ type IOConnectorMQ struct {
 	wgroup       *sync.WaitGroup
 	config       *ConfigRunner
 	mqClient     *MQClient
-	inputCh      chan InputMessage
-	outputCh     chan string
 }
 
-func (i *IOConnectorMQ) InputInit(ctx context.Context) {
+func (i *IOConnectorMQ) InputInit(ctx context.Context, inputCh chan InputMessage) {
 	err := i.mqClient.CheckInputQueue(i.config.MqInputQueue)
 	if err != nil {
 		log.Panicf("%v", err)
@@ -139,35 +137,33 @@ func (i *IOConnectorMQ) InputInit(ctx context.Context) {
 		log.Panicf("%v", err)
 	}
 
-	i.inputCh = make(chan InputMessage)
 	i.wgroup.Add(1)
 
 	go func() {
 		defer i.wgroup.Done()
+
 		for {
 			select {
 			case <-ctx.Done():
 				i.mqClient.Close()
 				return
 			case msg := <-msgChannel:
-				i.inputCh <- &InputMessageMQ{message: msg}
+				inputCh <- &InputMessageMQ{message: msg}
 			}
 		}
 	}()
 }
 
-func (i *IOConnectorMQ) InputChannel(ctx context.Context) chan InputMessage {
-	i.mqInputOnce.Do(func() { i.InputInit(ctx) })
-	return i.inputCh
+func (i *IOConnectorMQ) SetInputChannel(ctx context.Context, inputCh chan InputMessage) {
+	i.mqInputOnce.Do(func() { i.InputInit(ctx, inputCh) })
 }
 
-func (i *IOConnectorMQ) OutputInit(ctx context.Context) {
+func (i *IOConnectorMQ) OutputInit(ctx context.Context, outputCh chan string) {
 	err := i.mqClient.CheckOutputQueue(i.config.MqOutputExchange, i.config.MqOutputRoutingKey)
 	if err != nil {
 		log.Fatalf("cannot connect to output queue, %v", err)
 	}
 
-	i.outputCh = make(chan string)
 	i.wgroup.Add(1)
 
 	go func() {
@@ -178,7 +174,7 @@ func (i *IOConnectorMQ) OutputInit(ctx context.Context) {
 			case <-ctx.Done():
 				// close output connection
 				return
-			case output := <-i.outputCh:
+			case output := <-outputCh:
 				err = i.mqClient.Publish(i.config.MqOutputExchange, i.config.MqOutputRoutingKey, output)
 				if err != nil {
 					log.Printf("publish error, %v", err)
@@ -189,9 +185,8 @@ func (i *IOConnectorMQ) OutputInit(ctx context.Context) {
 	}()
 }
 
-func (i *IOConnectorMQ) OutputChannel(ctx context.Context) chan string {
-	i.mqOutputOnce.Do(func() { i.OutputInit(ctx) })
-	return i.outputCh
+func (i *IOConnectorMQ) SetOutputChannel(ctx context.Context, outputCh chan string) {
+	i.mqOutputOnce.Do(func() { i.OutputInit(ctx, outputCh) })
 }
 
 func NewIOConnectorMQ(config *ConfigRunner, wgroup *sync.WaitGroup) (*IOConnectorMQ, error) {

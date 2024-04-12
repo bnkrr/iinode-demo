@@ -30,11 +30,9 @@ type IOConnectorFile struct {
 	outputOnce sync.Once
 	wgroup     *sync.WaitGroup
 	config     *ConfigRunner
-	inputCh    chan InputMessage
-	outputCh   chan string
 }
 
-func (i *IOConnectorFile) InputInit(ctx context.Context) {
+func (i *IOConnectorFile) InputInit(ctx context.Context, inputCh chan InputMessage) {
 	file, err := os.Open(i.config.FileInputPath)
 
 	if err != nil {
@@ -50,7 +48,6 @@ func (i *IOConnectorFile) InputInit(ctx context.Context) {
 		lines = append(lines, fileScanner.Text())
 	}
 
-	i.inputCh = make(chan InputMessage)
 	i.wgroup.Add(1)
 
 	go func() {
@@ -63,7 +60,7 @@ func (i *IOConnectorFile) InputInit(ctx context.Context) {
 					file.Close()
 					return
 				default:
-					i.inputCh <- &InputMessageFile{text: line}
+					inputCh <- &InputMessageFile{text: line}
 				}
 			}
 			if i.config.FileRestartInterval > 0 {
@@ -73,13 +70,11 @@ func (i *IOConnectorFile) InputInit(ctx context.Context) {
 	}()
 }
 
-func (i *IOConnectorFile) InputChannel(ctx context.Context) chan InputMessage {
-	i.inputOnce.Do(func() { i.InputInit(ctx) })
-	return i.inputCh
+func (i *IOConnectorFile) SetInputChannel(ctx context.Context, inputCh chan InputMessage) {
+	i.inputOnce.Do(func() { i.InputInit(ctx, inputCh) })
 }
 
-func (i *IOConnectorFile) OutputInit(ctx context.Context) {
-	i.outputCh = make(chan string)
+func (i *IOConnectorFile) OutputInit(ctx context.Context, outputCh chan string) {
 	i.wgroup.Add(1)
 
 	if i.config.FileOutputPath == "" {
@@ -91,7 +86,7 @@ func (i *IOConnectorFile) OutputInit(ctx context.Context) {
 				case <-ctx.Done():
 					// close output connection
 					return
-				case output := <-i.outputCh:
+				case output := <-outputCh:
 					log.Printf("output: %s\n", output)
 
 				}
@@ -113,7 +108,7 @@ func (i *IOConnectorFile) OutputInit(ctx context.Context) {
 				case <-ctx.Done():
 					file.Close()
 					return
-				case output := <-i.outputCh:
+				case output := <-outputCh:
 					log.Printf("output: %s\n", output)
 					_, err := writer.WriteString(output + "\n")
 					if err != nil {
@@ -130,9 +125,8 @@ func (i *IOConnectorFile) OutputInit(ctx context.Context) {
 
 }
 
-func (i *IOConnectorFile) OutputChannel(ctx context.Context) chan string {
-	i.outputOnce.Do(func() { i.OutputInit(ctx) })
-	return i.outputCh
+func (i *IOConnectorFile) SetOutputChannel(ctx context.Context, outputCh chan string) {
+	i.outputOnce.Do(func() { i.OutputInit(ctx, outputCh) })
 }
 
 func NewIOConnectorFile(config *ConfigRunner, wgroup *sync.WaitGroup) (*IOConnectorFile, error) {

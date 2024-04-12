@@ -5,8 +5,13 @@ package main
 // @Create       dlchang (2024/04/03 15:00)
 
 // todo:
-// 1. prefetch & ack
-// 2. publish & consume 使用两个connection
+// 1. prefetch
+// 2. 拆分IOConnectorMQ
+
+// 目前MQ的connection还是按不同的runner分离设计，而不是统一的。
+// 这样更灵活，方便支持小规模测绘，允许不同的service连接不同的MQ服务。
+// 如果确定使用固定MQ接口，应该使用统一MQ服务，使用单个client，
+// 利用两个connection分隔输入输出，建立多个channel和多个队列复用connection
 import (
 	"context"
 	"log"

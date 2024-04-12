@@ -12,6 +12,8 @@ import (
 type ConfigRunner struct {
 	Name                string  `json:"name"`                  // 服务名称
 	IOType              string  `json:"io-type"`               // IO类型
+	InputType           string  `json:"input-type"`            // Input类型
+	OutputType          string  `json:"output-type"`           // Output类型
 	MqUrl               string  `json:"mq-url"`                // MQ的配置地址，形如 amqp://user:password@localhost:5672/vhost
 	MqInputQueue        string  `json:"mq-input-queue"`        // MQ输入队列名称
 	MqOutputExchange    string  `json:"mq-output-exchange"`    // MQ输出exchange名称
@@ -26,12 +28,28 @@ type ConfigRunners struct {
 	Services []ConfigRunner `json:"services"`
 }
 
+func (c *ConfigRunners) InitIOType() error {
+	for _, cfg := range c.Services {
+		if cfg.InputType == "" {
+			cfg.InputType = cfg.IOType
+		}
+		if cfg.OutputType == "" {
+			cfg.OutputType = cfg.IOType
+		}
+	}
+	return nil
+}
+
 func (c *ConfigRunners) LoadConfigFromFile(configPath string) error {
 	byteResult, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal([]byte(byteResult), c)
+	err = json.Unmarshal([]byte(byteResult), c)
+	if err != nil {
+		return err
+	}
+	return c.InitIOType()
 }
 
 // @title        GetConfig

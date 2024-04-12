@@ -22,8 +22,11 @@ type InputMessage interface {
 	Ack()
 }
 
-type IOConnecter interface {
+type InputConnecter interface {
 	SetInputChannel(context.Context, chan InputMessage)
+}
+
+type OutputConnector interface {
 	SetOutputChannel(context.Context, chan string)
 }
 
@@ -36,7 +39,8 @@ type Runner struct {
 	cancel        context.CancelFunc
 	wgroup        *sync.WaitGroup
 	serviceClient pb.ServiceClient
-	ioconn        IOConnecter
+	inconn        InputConnecter
+	outconn       OutputConnector
 	inputCh       chan InputMessage
 	outputCh      chan string
 	callEndChn    map[int](chan struct{})
@@ -44,7 +48,6 @@ type Runner struct {
 
 func (r *Runner) Worker(ctx context.Context, wid int) error {
 	defer r.wgroup.Done()
-	// _ = r.ioconn.OutputChannel(ctx)
 
 	for {
 		select {
@@ -128,24 +131,35 @@ func (r *Runner) Start() error {
 	r.wgroup = &sync.WaitGroup{}
 	r.wgroup.Add(r.concurrency) // add outside of go func, in case waitgroup wait ends unexpectedly
 
-	var ioconn IOConnecter
+	var inconn InputConnecter
+	var outconn OutputConnector
 	var err error
-	if r.config.IOType == "mq" {
-		ioconn, err = NewIOConnectorMQ(r.config, r.wgroup)
+	if r.config.InputType == "mq" {
+		inconn, err = NewIOConnectorMQ(r.config, r.wgroup)
 	} else {
-		ioconn, err = NewIOConnectorFile(r.config, r.wgroup)
+		inconn, err = NewIOConnectorFile(r.config, r.wgroup)
 	}
 	if err != nil {
 		return err
 	}
-	r.ioconn = ioconn
+	r.inconn = inconn
+
+	if r.config.OutputType == "mq" {
+		outconn, err = NewIOConnectorMQ(r.config, r.wgroup)
+	} else {
+		outconn, err = NewIOConnectorFile(r.config, r.wgroup)
+	}
+	if err != nil {
+		return err
+	}
+	r.outconn = outconn
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	r.inputCh = make(chan InputMessage)
-	r.ioconn.SetInputChannel(ctx, r.inputCh)
+	r.inconn.SetInputChannel(ctx, r.inputCh)
 	r.outputCh = make(chan string)
-	r.ioconn.SetOutputChannel(ctx, r.outputCh)
+	r.outconn.SetOutputChannel(ctx, r.outputCh)
 
 	for i := 1; i <= r.concurrency; i++ {
 		r.callEndChn[i] = make(chan struct{})

@@ -121,3 +121,7 @@ A: 什么语言都可以，只要能实现gRPC的接口即可。Python版demo可
   - ~~ACK支持~~
   - prefetch
 * ~~IO分离~~
+* Dockerize
+  - registry
+  - golang service
+  - python service

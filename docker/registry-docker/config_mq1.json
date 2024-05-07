@@ -1,0 +1,12 @@
+{
+    "rabbitmq": {
+        "url": "amqp://user:passwd@127.0.0.1:5672/vhost",
+        "output-exchange": "ex-name",
+        "input-queue-preffix": "q-input-",
+        "output-routing-key-preffix": "rkey-",
+        "allow-no-name": true,
+        "default-output-queue-preffix": "q-output-"
+    },
+
+    "services": []
+}

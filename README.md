@@ -154,7 +154,7 @@ A: 什么语言都可以，只要能实现gRPC的接口即可。Python版demo可
 * ~~IO分离~~
 * ~~统一MQ队列：统一配置部署~~
 * Dockerize
-  - registry
+  - ~~registry~~
   - golang service
   - python service
 * 异常处理

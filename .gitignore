@@ -1,3 +1,6 @@
+# binaries
+docker/registry-docker/registry
+
 .vscode/
 .local/
 

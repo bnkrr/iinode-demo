@@ -1,0 +1,13 @@
+version: "3"
+services:
+  iinode-registry:
+    container_name: ct-iinode-registry
+    image: iinode-registry:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      - --addr=localhost:59201
+      - --config=config_mq1.json
+    network_mode: host
+    

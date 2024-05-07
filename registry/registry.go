@@ -45,6 +45,7 @@ type RegistryServer struct {
 	config                         *ConfigRunners
 	services                       sync.Map
 	runners                        sync.Map
+	ioManager                      *IOManager
 }
 
 // 查看service是否需要被运行，如果需要的话就运行
@@ -69,7 +70,7 @@ func (s *RegistryServer) CheckRunner(service *LocalService) {
 	}
 	s.runners.Store(service.Name, runner)
 
-	runner.Start()
+	runner.StartWithIOManager(s.ioManager)
 	runner.Serve()
 }
 
@@ -130,6 +131,14 @@ func (s *RegistryServer) SubmitResult(ctx context.Context, req *pb.SubmitResultR
 }
 
 func (s *RegistryServer) Serve() {
+	// rabbitmq
+	iomgr, err := NewIOManager(s.config)
+	if err != nil {
+		log.Panicf("IO error: %v\n", err)
+	}
+	s.ioManager = iomgr
+
+	// grpc
 	listener, err := net.Listen(Network, *registryAddress)
 	if err != nil {
 		log.Panicf("net.Listen err: %v", err)
@@ -144,11 +153,13 @@ func (s *RegistryServer) Serve() {
 func NewRegistryServer() *RegistryServer {
 	config := &ConfigRunners{}
 	config.LoadConfigFromFile(*configPath)
+	log.Printf("config loaded, allow-no-name mode: %v\n", config.RabbitMQ.AllowNoName)
 
 	return &RegistryServer{
-		config:   config,
-		services: sync.Map{},
-		runners:  sync.Map{},
+		config:    config,
+		services:  sync.Map{},
+		runners:   sync.Map{},
+		ioManager: nil,
 	}
 }
 

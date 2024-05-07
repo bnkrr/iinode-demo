@@ -22,7 +22,7 @@ type InputMessage interface {
 	Ack()
 }
 
-type InputConnecter interface {
+type InputConnector interface {
 	SetInputChannel(context.Context, chan InputMessage)
 }
 
@@ -39,7 +39,7 @@ type Runner struct {
 	cancel        context.CancelFunc
 	wgroup        *sync.WaitGroup
 	serviceClient pb.ServiceClient
-	inconn        InputConnecter
+	inconn        InputConnector
 	outconn       OutputConnector
 	inputCh       chan InputMessage
 	outputCh      chan string
@@ -127,28 +127,17 @@ func (r *Runner) ReceiveResult(req *pb.SubmitResultRequest) {
 	}
 }
 
-func (r *Runner) Start() error {
+func (r *Runner) StartWithIOManager(ioManager *IOManager) error {
 	r.wgroup = &sync.WaitGroup{}
-	r.wgroup.Add(r.concurrency) // add outside of go func, in case waitgroup wait ends unexpectedly
+	r.wgroup.Add(r.concurrency) // add outside of go func (before everything), in case waitgroup wait ends unexpectedly
 
-	var inconn InputConnecter
-	var outconn OutputConnector
-	var err error
-	if r.config.InputType == "mq" {
-		inconn, err = NewIOConnectorMQ(r.config, r.wgroup)
-	} else {
-		inconn, err = NewIOConnectorFile(r.config, r.wgroup)
-	}
+	// set up io connector
+	inconn, err := ioManager.GetInputConnector(r.config, r.wgroup)
 	if err != nil {
 		return err
 	}
 	r.inconn = inconn
-
-	if r.config.OutputType == "mq" {
-		outconn, err = NewIOConnectorMQ(r.config, r.wgroup)
-	} else {
-		outconn, err = NewIOConnectorFile(r.config, r.wgroup)
-	}
+	outconn, err := ioManager.GetOutputConnector(r.config, r.wgroup)
 	if err != nil {
 		return err
 	}

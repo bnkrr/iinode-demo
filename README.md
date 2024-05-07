@@ -20,7 +20,7 @@
 
 运行registry：
 ```shell
-go run registry/*.go --addr localhost:56789 --config registry/config_minimal.json # 通过--config指定config的地址
+go run registry/*.go --addr localhost:56789 --config registry/config.example/config_minimal.json # 通过--config指定config的地址
 ```
 
 同时运行service：
@@ -35,9 +35,9 @@ go run service/*.go --reg-addr localhost:56789
 ### registry 配置
 需要按照`registry/config.json.example`编写配置，以使得registry可以接入队列，根据队列输入输出调用service，或者接入文件输入输出调用service。
 
-使用`--config config.json`来指定配置文件运行registry，如下：
+使用`--config path/to/config.json`来指定配置文件运行registry，如下：
 ```shell
-go run registry/*.go --addr localhost:56789 --config registry/config.json
+go run registry/*.go --addr localhost:56789 --config path/to/config.json
 ```
 
 * 需要在`services`字段中列出本地的测量服务，每个服务是一个字典。
@@ -53,9 +53,32 @@ go run registry/*.go --addr localhost:56789 --config registry/config.json
     + 通过`mq-input-queue`指定输入队列名称
     + 通过`mq-output-exchange`指定输出exchange名称（可为空字符串，为空时直接输出到队列名）
     + 通过`mq-output-routing-key`指定输出routing key的名称（`mq-output-exchange`为空字符串时，routing key应为输出队列名）
+  - 设定`io-type`为其他值或空则启用 **统一MQ队列作为输入输出** 的模式，此模式下不需要填写过多的配置。详情见下文
+
+统一MQ输入输出模式
+* 统一MQ输入输出模式指定统一的MQ配置信息，每个服务只需要指定服务信息即可。该模式便于统一配置registry，便于测量服务的部署。
+* 在`rabbitmq`字段中列出RabbitMQ队列的信息。
+  - 通过`url`指定RabbitMQ服务器的配置。具体格式可见下方配置样例
+  - 通过`output-exchange`指定exchange的名称，用于汇总所有信息
+  - 通过`input-queue-preffix`指定输入队列名称前缀
+  - 通过`output-routing-key-preffix`指定输出的routing key名称前缀
+  
+* 在`services`字段中列出服务：
+  - 通过`name`指定服务名称。最小配置情况下，指定名称会自动建立输入输出队列
+    + 输入队列格式：`{rabbitmq.input-queue-preffix}{service.name}`，如`test-input-echoservice`
+    + 输出exchange：`{rabbitmq.output-exchange}`，如`test-exchange`
+    + 输出routing key格式：`{rabbitmq.output-routing-key-preffix}{service.name}`，如`rkey-echoservice`
+  - （可选）可通过`mq1-next-service`指定下一个服务名称，此时registry会自动绑定当前的输出exchange到下一个服务的输入队列，如将 `exchange=test-exchange, key=rkey-echoservice` 绑定到 `test-input-nextservice`
+  - （可选，和`mq1-next-service`互斥）在不需要连接多个服务时，也可以指定输出队列的名称，以供其他程序读取，如将 `exchange=test-exchange, key=rkey-echoservice` 绑定到 `test-output-queue`
 
 ```jsonc
 {
+    "rabbitmq": {
+        "url": "amqp://user:password@localhost:5672/vhost", // MQ队列信息
+        "output-exchange": "ex-test", // exchange的名称
+        "input-queue-preffix": "input-test-", // 输入队列前缀
+        "output-routing-key-preffix": "rkey-", // 输出key前缀
+    },
     "services": [
         {
             "name": "EchoService",  //服务名称
@@ -72,6 +95,11 @@ go run registry/*.go --addr localhost:56789 --config registry/config.json
             "mq-input-queue": "input-test", // 输入队列名称
             "mq-output-exchange": "ex-test", // 输出exchange名称
             "mq-output-routing-key": "output" // 输出routing key名称（如exchange为空，则为输出队列名称）
+        },
+        {
+            "name": "CustomService",  //服务名称。只提供服务名称则可以默认采用统一队列的方式进行IO
+            "mq1-next-service": "NextCustomService", // （可选）如果多个服务相连接，可提供下一个服务的名称
+            "mq1-output-queue": "output-queue-name", // （可选，和next-service互斥）仍然可以指定输出的队列
         }
     ]
 }
@@ -102,6 +130,9 @@ A: 什么语言都可以，只要能实现gRPC的接口即可。Python版demo可
 
 ## Changelog
 ```
+20240506
+增加统一的MQ输入输出
+
 20240412
 增加MQ输入ACK功能，区分输入输出流
 
@@ -121,7 +152,10 @@ A: 什么语言都可以，只要能实现gRPC的接口即可。Python版demo可
   - ~~ACK支持~~
   - prefetch
 * ~~IO分离~~
+* ~~统一MQ队列：统一配置部署~~
 * Dockerize
   - registry
   - golang service
   - python service
+* 异常处理
+* 性能

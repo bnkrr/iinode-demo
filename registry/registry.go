@@ -48,6 +48,11 @@ type RegistryServer struct {
 	ioManager                      *IOManager
 }
 
+// 删除runner信息
+func (s *RegistryServer) CleanupRunner(serviceName string) {
+	s.runners.Delete(serviceName)
+}
+
 // 查看service是否需要被运行，如果需要的话就运行
 func (s *RegistryServer) CheckRunner(service *LocalService) {
 	configService, ok := s.config.GetConfig(service)
@@ -72,6 +77,9 @@ func (s *RegistryServer) CheckRunner(service *LocalService) {
 
 	runner.StartWithIOManager(s.ioManager)
 	runner.Serve()
+
+	// 在服务关闭后删除runner
+	s.CleanupRunner(service.Name)
 }
 
 // 检查一个service是否已存在

@@ -66,17 +66,19 @@ func (r *Runner) CallGeneric(ctx context.Context, wid int, input InputMessage) {
 	} else if r.callType == pb.CallType_ASYNC {
 		r.CallAsync(ctx, wid, input.Msg())
 	} else {
-		r.Call(ctx, input.Msg())
+		r.Call(ctx, input)
 	}
-	input.Ack()
 }
 
-func (r *Runner) Call(ctx context.Context, input string) {
-	resp, err := r.serviceClient.Call(ctx, &pb.ServiceCallRequest{Input: input})
+func (r *Runner) Call(ctx context.Context, input InputMessage) {
+	resp, err := r.serviceClient.Call(ctx, &pb.ServiceCallRequest{Input: input.Msg()})
 	if err != nil {
 		log.Printf("call err, try again later: %v\n", err)
+		// 读取出错，直接停止runner，等待重新注册
+		r.Stop()
 	} else {
 		r.outputCh <- resp.Output
+		input.Ack()
 	}
 }
 
@@ -168,9 +170,9 @@ func (r *Runner) Stop() error {
 }
 
 func (r *Runner) Serve() error {
-	log.Println("started")
+	log.Printf("runner %v started\n", r.name)
 	r.wgroup.Wait()
-	log.Println("stopped")
+	log.Printf("runner %v stopped\n", r.name)
 	return nil
 }
 

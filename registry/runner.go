@@ -62,9 +62,9 @@ func (r *Runner) Worker(ctx context.Context, wid int) error {
 func (r *Runner) CallGeneric(ctx context.Context, wid int, input InputMessage) {
 	// call
 	if r.callType == pb.CallType_STREAM {
-		r.CallStream(ctx, input.Msg())
+		r.CallStream(ctx, input)
 	} else if r.callType == pb.CallType_ASYNC {
-		r.CallAsync(ctx, wid, input.Msg())
+		r.CallAsync(ctx, wid, input)
 	} else {
 		r.Call(ctx, input)
 	}
@@ -82,10 +82,11 @@ func (r *Runner) Call(ctx context.Context, input InputMessage) {
 	}
 }
 
-func (r *Runner) CallStream(ctx context.Context, input string) {
-	stream, err := r.serviceClient.CallStream(ctx, &pb.ServiceCallRequest{Input: input})
+func (r *Runner) CallStream(ctx context.Context, input InputMessage) {
+	stream, err := r.serviceClient.CallStream(ctx, &pb.ServiceCallRequest{Input: input.Msg()})
 	if err != nil {
 		log.Printf("call err, try again later: %v\n", err)
+		r.Stop()
 	} else {
 		for {
 			resp, err := stream.Recv()
@@ -93,17 +94,19 @@ func (r *Runner) CallStream(ctx context.Context, input string) {
 				break
 			}
 			if err != nil {
-				log.Fatalf("%v.CallStream, %v", r.serviceClient, err)
+				log.Printf("%v.CallStream, %v", r.serviceClient, err)
+				r.Stop()
 			}
 			r.outputCh <- resp.Output
 		}
 	}
 }
 
-func (r *Runner) CallAsync(ctx context.Context, wid int, input string) {
-	resp, err := r.serviceClient.CallAsync(ctx, &pb.ServiceCallRequest{RequestId: int32(wid), Input: input})
+func (r *Runner) CallAsync(ctx context.Context, wid int, input InputMessage) {
+	resp, err := r.serviceClient.CallAsync(ctx, &pb.ServiceCallRequest{RequestId: int32(wid), Input: input.Msg()})
 	if err != nil {
 		log.Printf("call err, try again later: %v\n", err)
+		r.Stop()
 		return
 	} else {
 		log.Printf("async call (id:%v), %v\n", wid, resp.Output)
@@ -112,7 +115,9 @@ func (r *Runner) CallAsync(ctx context.Context, wid int, input string) {
 	if !ok {
 		log.Panicf("err find channel, %v\n", wid)
 	}
+	// 阻塞，直到任务完成
 	<-ch
+	input.Ack()
 }
 
 func (r *Runner) ReceiveResult(req *pb.SubmitResultRequest) {

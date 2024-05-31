@@ -128,11 +128,11 @@ func (s *RegistryServer) RegisterService(ctx context.Context, req *pb.RegisterSe
 func (s *RegistryServer) SubmitResult(ctx context.Context, req *pb.SubmitResultRequest) (*pb.SubmitResultResponse, error) {
 	runner, ok := s.runners.Load(req.Name)
 	if !ok {
-		return nil, errors.New("runner not found")
+		return nil, errors.New("service not found")
 	}
 	r, ok := runner.(*Runner)
 	if !ok {
-		return nil, errors.New("runner loading error")
+		return nil, errors.New("service loading error")
 	}
 	r.ReceiveResult(req)
 	return &pb.SubmitResultResponse{Message: "success"}, nil

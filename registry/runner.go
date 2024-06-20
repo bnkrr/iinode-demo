@@ -31,19 +31,20 @@ type OutputConnector interface {
 }
 
 type Runner struct {
-	name          string
-	port          int
-	concurrency   int
-	callType      pb.CallType
-	config        *ConfigRunner
-	cancel        context.CancelFunc
-	wgroup        *sync.WaitGroup
-	serviceClient pb.ServiceClient
-	inconn        InputConnector
-	outconn       OutputConnector
-	inputCh       chan InputMessage
-	outputCh      chan string
-	callEndChn    map[int](chan struct{})
+	name               string
+	port               int
+	concurrency        int
+	callType           pb.CallType
+	config             *ConfigRunner
+	cancel             context.CancelFunc
+	wgroup             *sync.WaitGroup
+	serviceClient      pb.ServiceClient
+	inconn             InputConnector
+	outconn            OutputConnector
+	inputCh            chan InputMessage
+	outputCh           chan string
+	callEndChn         map[int](chan struct{})
+	ConfigLocalService *LocalService
 }
 
 func (r *Runner) Worker(ctx context.Context, wid int) error {
@@ -195,13 +196,14 @@ func NewRunner(s *LocalService, c *ConfigRunner) (*Runner, error) {
 		return nil, err
 	}
 	r := &Runner{
-		name:          s.Name,
-		port:          s.Port,
-		concurrency:   s.Concurrency,
-		callType:      s.CallType,
-		config:        c,
-		serviceClient: rpcClient,
-		callEndChn:    make(map[int]chan struct{}),
+		name:               s.Name,
+		port:               s.Port,
+		concurrency:        s.Concurrency,
+		callType:           s.CallType,
+		config:             c,
+		serviceClient:      rpcClient,
+		callEndChn:         make(map[int]chan struct{}),
+		ConfigLocalService: s,
 	}
 	return r, nil
 }

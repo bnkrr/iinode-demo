@@ -10,13 +10,29 @@ import (
 	"strings"
 )
 
+type ConfigRunnerMatchResultType int
+
+const (
+	ConfigRunner_NOTFOUND ConfigRunnerMatchResultType = iota
+	ConfigRunner_SAME
+	ConfigRunner_DIFFERENT
+)
+
+type ConfigEtcd struct {
+	Url      string `json:"url"`      // etcd服务端地址，形如 localhost:12345
+	User     string `json:"user"`     // 用户名
+	Password string `json:"password"` // 密码
+	Prefix   string `json:"prefix"`   // key前缀
+}
+
 type ConfigMQ struct {
-	Url                      string `json:"url"`                          // MQ的配置地址，形如 amqp://user:password@localhost:5672/vhost
-	OutputExchange           string `json:"output-exchange"`              // MQ输出exchange名称
-	InputQueuePrefix         string `json:"input-queue-preffix"`          // 输入队列前缀
-	OutputRoutingKeyPrefix   string `json:"output-routing-key-preffix"`   // 输出key前缀
-	AllowNoName              bool   `json:"allow-no-name"`                // 是否允许未被列出的service
-	DefaultOutputQueuePrefix string `json:"default-output-queue-preffix"` // 未被列出service默认输出队列前缀
+	Url                      string `json:"url"`                         // MQ的配置地址，形如 amqp://user:password@localhost:5672/vhost
+	OutputExchange           string `json:"output-exchange"`             // MQ输出exchange名称
+	InputQueuePrefix         string `json:"input-queue-prefix"`          // 输入队列前缀
+	OutputRoutingKeyPrefix   string `json:"output-routing-key-prefix"`   // 输出key前缀
+	AllowNoName              bool   `json:"allow-no-name"`               // 是否允许未被列出的service
+	DefaultOutputQueuePrefix string `json:"default-output-queue-prefix"` // 未被列出service默认输出队列前缀
+	Version                  string `json:"version"`                     // 配置的版本，用于区分自动更新配置
 }
 
 type ConfigRunner struct {
@@ -34,14 +50,16 @@ type ConfigRunner struct {
 	FileRestartInterval float32 `json:"file-restart-interval"` // 文件方式重新发送输入的时间间隔
 	Mq1NextService      string  `json:"mq1-next-service"`      // 下一个服务名
 	Mq1OutputQueue      string  `json:"mq1-output-queue"`      // 或直接输出到队列
+	Version             string  `json:"version"`               // 配置的版本，用于区分自动更新配置
 }
 
-type ConfigRunners struct {
+type ConfigRegistry struct {
+	Etcd     ConfigEtcd     `json:"etcd"`
 	RabbitMQ ConfigMQ       `json:"rabbitmq"`
 	Services []ConfigRunner `json:"services"`
 }
 
-func (c *ConfigRunners) InitIOType() error {
+func (c *ConfigRegistry) InitIOType() error {
 	for _, cfg := range c.Services {
 		if cfg.InputType == "" {
 			cfg.InputType = cfg.IOType
@@ -53,16 +71,20 @@ func (c *ConfigRunners) InitIOType() error {
 	return nil
 }
 
-func (c *ConfigRunners) MQEnabled() bool {
+func (c *ConfigRegistry) MQEnabled() bool {
 	return c.RabbitMQ.Url != ""
 }
 
-func (c *ConfigRunners) LoadConfigFromFile(configPath string) error {
+func (c *ConfigRegistry) LoadConfigFromFile(configPath string) error {
 	byteResult, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
 	}
-	err = json.Unmarshal([]byte(byteResult), c)
+	return c.LoadConfigFromBytes([]byte(byteResult))
+}
+
+func (c *ConfigRegistry) LoadConfigFromBytes(cfgbytes []byte) error {
+	err := json.Unmarshal(cfgbytes, c)
 	if err != nil {
 		return err
 	}
@@ -72,20 +94,32 @@ func (c *ConfigRunners) LoadConfigFromFile(configPath string) error {
 // @title        GetConfig
 // @description  查询本地服务service的对应配置
 // @auth         dlchang (2024/04/03 15:17)
-// @param        service   *LocalService   本地服务的指针，内涵服务名称等信息
+// @param        serviceName   string   服务名称
 // @return       *ConfigRunner   对应服务的runner配置，查询不到则为nil
 // @return       bool   是否可以查询到对应的runner配置
-func (c *ConfigRunners) GetConfig(service *LocalService) (*ConfigRunner, bool) {
+func (c *ConfigRegistry) GetConfigRunner(serviceName string) (*ConfigRunner, bool) {
 	for _, s := range c.Services {
-		if service.Name == s.Name {
+		if serviceName == s.Name {
 			return &s, true
 		}
 	}
 	if c.RabbitMQ.AllowNoName {
 		return &ConfigRunner{
-			Name:           service.Name,
-			Mq1OutputQueue: c.RabbitMQ.DefaultOutputQueuePrefix + strings.ToLower(service.Name),
+			Name:           serviceName,
+			Mq1OutputQueue: c.RabbitMQ.DefaultOutputQueuePrefix + strings.ToLower(serviceName),
+			Version:        c.RabbitMQ.Version,
 		}, true
 	}
 	return nil, false
+}
+
+func (c *ConfigRegistry) MatchConfigRunner(configRunner *ConfigRunner) ConfigRunnerMatchResultType {
+	cfg, ok := c.GetConfigRunner(configRunner.Name)
+	if !ok {
+		return ConfigRunner_NOTFOUND
+	}
+	if cfg.Version == configRunner.Version {
+		return ConfigRunner_SAME
+	}
+	return ConfigRunner_DIFFERENT
 }

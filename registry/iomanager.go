@@ -42,7 +42,7 @@ func (m *IOManager) GetOutputConnector(c *ConfigRunner, wgroup *sync.WaitGroup) 
 	return nil, errors.New("no io method matched")
 }
 
-func NewIOManager(cs *ConfigRunners) (*IOManager, error) {
+func NewIOManager(cs *ConfigRegistry) (*IOManager, error) {
 	m := &IOManager{}
 	if cs.MQEnabled() {
 		mqManager, err := NewMQConnectorManger(cs.RabbitMQ)

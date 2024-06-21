@@ -12,7 +12,6 @@ import (
 	"log"
 	"net"
 	"sync"
-	"time"
 
 	pb "github.com/bnkrr/iinode-demo/pb_autogen"
 	"go.etcd.io/etcd/api/v3/mvccpb"
@@ -23,46 +22,28 @@ const (
 	Network string = "tcp"
 )
 
-type LocalServiceRegisterStatusType int
+// 【runner配置】和【runner】的匹配的状态
+type LocalServiceRunnerStatusType int
 
 const (
-	LocalServiceRegisterStatus_NEW    LocalServiceRegisterStatusType = iota // 新服务
-	LocalServiceRegisterStatus_RENEW                                        // 旧服务续租
-	LocalServiceRegisterStatus_UPDATE                                       // 更新服务
-	LocalServiceRegisterStatus_IDLE                                         // 什么都不做
-	LocalServiceRegisterStatus_STOP                                         // 停止现有服务
-	LocalServiceRegisterStatus_ERROR                                        // 发生错误
-	LocalServiceRegisterStatus_OTHER                                        // 其他情况
+	LocalServiceRunnerStatus_NEW     LocalServiceRunnerStatusType = iota // 有runner配置，无匹配runner，运行新runner
+	LocalServiceRunnerStatus_UPDATE                                      // runner配置更新，重新运行runner
+	LocalServiceRunnerStatus_RUNNING                                     // 有runner配置，已有runner运行，无动作
+	LocalServiceRunnerStatus_STOP                                        // 无runner配置，停止现有runner
+	LocalServiceRunnerStatus_ERROR                                       // 发生错误
+	LocalServiceRunnerStatus_OTHER                                       // 其他情况，如无runner配置也无匹配runner
 )
-
-func GetTimestamp() int64 {
-	return time.Now().UnixMilli()
-}
 
 var (
 	registryAddress = flag.String("addr", "localhost:48001", "Listen address in the format of host:port")
 	configPath      = flag.String("config", "config_example.json", "configuration path of registry")
 )
 
-type LocalService struct {
-	Name        string      // 用于存储service的名称
-	Port        int         // 用于存储service的端口
-	CallType    pb.CallType // 用户存储service的调用类型
-	Concurrency int         // 用户存储service的并发
-}
-
-func (s *LocalService) Same(other *LocalService) bool {
-	return s.Name == other.Name &&
-		s.Port == other.Port &&
-		s.Concurrency == other.Concurrency &&
-		s.CallType == other.CallType
-}
-
 // RegistryServer 供调试的注册服务器demo
 type RegistryServer struct {
 	pb.UnimplementedRegistryServer // 来自rpc生成代码
 	config                         *ConfigRegistry
-	services                       sync.Map
+	services                       *LocalServiceMap
 	runners                        sync.Map
 	ioManager                      *IOManager
 	etcdManager                    *EtcdManager
@@ -103,19 +84,6 @@ func (s *RegistryServer) CheckRunner(service *LocalService) {
 	s.CleanupRunner(service.Name)
 }
 
-// 检查一个service是否已存在
-func (s *RegistryServer) ServiceExists(service *LocalService) (bool, error) {
-	oldServiceAny, ok := s.services.Load(service.Name)
-	if !ok {
-		return false, nil
-	}
-	oldService, ok := oldServiceAny.(*LocalService)
-	if !ok {
-		return false, errors.New("load service err")
-	}
-	return oldService.Same(service), nil
-}
-
 // @title        RegisterService
 // @description  rpc接口实现，注册一个服务
 // @auth         dlchang (2024/03/14 16:30)
@@ -123,25 +91,35 @@ func (s *RegistryServer) ServiceExists(service *LocalService) (bool, error) {
 // @param        req   *pb.RegisterServiceRequest   服务注册请求的rpc生成类型，内含服务各项信息，比如端口、是否是流调用等等。
 // @return       *pb.RegisterServiceResponse   服务注册响应的rpc生成类型
 func (s *RegistryServer) RegisterService(ctx context.Context, req *pb.RegisterServiceRequest) (*pb.RegisterServiceResponse, error) {
-	log.Printf("%s(localhost:%d) try to register\n", req.Name, req.Port)
-	newService := &LocalService{
-		Name:        req.Name,
-		Port:        int(req.Port),
-		Concurrency: int(req.Concurrency),
-		CallType:    req.CallType,
+	registerStatus, service, err := s.services.Register(req)
+	if err != nil {
+		return nil, err
+	}
+
+	switch registerStatus {
+	case LocalServiceRegisterStatus_NEW,
+		LocalServiceRegisterStatus_RENEW,
+		LocalServiceRegisterStatus_UPDATE:
+		//
+		newLeaseId, err := s.etcdManager.RegisterLocalService(ctx, service)
+		if err != nil {
+			service.LeaseId = newLeaseId
+		}
+		log.Printf("%s(localhost:%d) register(%v)\n", req.Name, req.Port, registerStatus)
 	}
 
 	// 检查信息是否更改，如果是新的服务则需要运行
-	s.services.Store(req.Name, newService)
-	status, err := s.UpdateLocalService(newService)
+	status, err := s.UpdateLocalServiceRunner(service)
 	if err != nil {
 		return nil, err
 	}
 	switch status {
-	case LocalServiceRegisterStatus_UPDATE:
+	case LocalServiceRunnerStatus_UPDATE:
 		return &pb.RegisterServiceResponse{Message: "updated"}, nil
-	case LocalServiceRegisterStatus_STOP:
+	case LocalServiceRunnerStatus_STOP:
 		return &pb.RegisterServiceResponse{Message: "stopped"}, nil
+	case LocalServiceRunnerStatus_NEW:
+		return &pb.RegisterServiceResponse{Message: "new"}, nil
 	}
 	return &pb.RegisterServiceResponse{Message: "kept"}, nil
 }
@@ -183,7 +161,7 @@ func (s *RegistryServer) CreateRunner(service *LocalService, configRunner *Confi
 // 2.2.有runner
 // 2.2.1. config runner未更新，无动作
 // 2.2.2. config runner已更新，停止现有runner，运行新runner
-func (s *RegistryServer) UpdateLocalService(service *LocalService) (LocalServiceRegisterStatusType, error) {
+func (s *RegistryServer) UpdateLocalServiceRunner(service *LocalService) (LocalServiceRunnerStatusType, error) {
 	configRunner, configRunnerFound := s.config.GetConfigRunner(service.Name)
 	oldRunner, runnerFound := s.runners.Load(service.Name)
 
@@ -194,39 +172,39 @@ func (s *RegistryServer) UpdateLocalService(service *LocalService) (LocalService
 			r, ok := oldRunner.(*Runner)
 			if ok {
 				r.Stop()
-				return LocalServiceRegisterStatus_STOP, nil
+				return LocalServiceRunnerStatus_STOP, nil
 			}
 		}
-		return LocalServiceRegisterStatus_OTHER, nil
+		return LocalServiceRunnerStatus_OTHER, nil
 	}
 
 	// 2.有新config runner
 	// 2.1.无runner，新建runner运行
 	if !runnerFound {
 		go s.CreateRunner(service, configRunner)
-		return LocalServiceRegisterStatus_IDLE, nil
+		return LocalServiceRunnerStatus_NEW, nil
 	}
 
 	// 2.2.有runner
 	r, ok := oldRunner.(*Runner)
 	if !ok {
-		return LocalServiceRegisterStatus_ERROR, errors.New("load new runner error")
+		return LocalServiceRunnerStatus_ERROR, errors.New("load new runner error")
 	}
 
 	switch s.config.MatchConfigRunner(r.config) {
 	// 2.2.0. config runner找不到（不可能发生）
 	case ConfigRunner_NOTFOUND:
 		r.Stop()
-		return LocalServiceRegisterStatus_STOP, nil
+		return LocalServiceRunnerStatus_STOP, nil
 	// 2.2.1. config runner未更新，无动作
 	case ConfigRunner_SAME:
-		return LocalServiceRegisterStatus_IDLE, nil
+		return LocalServiceRunnerStatus_RUNNING, nil
 	// 2.2.2. config runner已更新，停止现有runner，运行新runner
 	case ConfigRunner_DIFFERENT:
 		r.Stop()
 		go s.CreateRunner(service, configRunner)
 	}
-	return LocalServiceRegisterStatus_UPDATE, nil
+	return LocalServiceRunnerStatus_UPDATE, nil
 }
 
 func (s *RegistryServer) UpdateConfig(cfgbytes []byte) error {
@@ -252,12 +230,8 @@ func (s *RegistryServer) UpdateConfig(cfgbytes []byte) error {
 	// 处理新service问题
 	// 1.更换config
 	// 2.依照本地存在的service对runner进行update
-	s.services.Range(func(name any, value any) bool {
-		service, ok := value.(*LocalService)
-		if !ok {
-			return true
-		}
-		s.UpdateLocalService(service)
+	s.services.RangeServices(func(name any, service *LocalService) bool {
+		s.UpdateLocalServiceRunner(service)
 		return true
 	})
 
@@ -340,7 +314,7 @@ func NewRegistryServer() *RegistryServer {
 
 	return &RegistryServer{
 		config:      config,
-		services:    sync.Map{},
+		services:    &LocalServiceMap{minUpdateIntervalMilliSec: 9000},
 		runners:     sync.Map{},
 		ioManager:   nil,
 		etcdManager: nil,

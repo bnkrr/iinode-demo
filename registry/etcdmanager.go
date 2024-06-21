@@ -9,16 +9,25 @@ import (
 )
 
 type EtcdManager struct {
-	Id             string
-	prefix         string
-	client         *etcd3.Client
-	defaultTimeout time.Duration
-	keepAliveTTL   int64
-	node           NodeMetadata
+	Id              string
+	prefix          string
+	client          *etcd3.Client
+	defaultTimeout  time.Duration
+	keepAliveTTL    int64
+	localServiceTTL int64
+	node            NodeMetadata
 }
 
 func (e *EtcdManager) metadataPath(name string) string {
-	return fmt.Sprintf("%s/metadata/%s/%s", e.prefix, e.Id, name)
+	return fmt.Sprintf("%s/status/%s/metadata/%s", e.prefix, e.Id, name)
+}
+
+func (e *EtcdManager) onlinePath() string {
+	return fmt.Sprintf("%s/status/%s/online", e.prefix, e.Id)
+}
+
+func (e *EtcdManager) localServicePath(serviceName string) string {
+	return fmt.Sprintf("%s/status/%s/services/%s", e.prefix, e.Id, serviceName)
 }
 
 func (e *EtcdManager) configPath() string {
@@ -73,8 +82,6 @@ func (e *EtcdManager) WatchConfig(ctx context.Context) <-chan etcd3.WatchRespons
 }
 
 func (e *EtcdManager) Register(ctx context.Context) (<-chan *etcd3.LeaseKeepAliveResponse, error) {
-	key := fmt.Sprintf("%s/online/%s", e.prefix, e.Id)
-
 	ctx0, cancel := context.WithTimeout(ctx, e.defaultTimeout)
 	leaseResp, err := e.client.Grant(ctx0, e.keepAliveTTL)
 	cancel()
@@ -83,13 +90,58 @@ func (e *EtcdManager) Register(ctx context.Context) (<-chan *etcd3.LeaseKeepAliv
 	}
 
 	ctx0, cancel = context.WithTimeout(ctx, e.defaultTimeout)
-	_, err = e.client.Put(ctx0, key, "true", etcd3.WithLease(leaseResp.ID))
+	_, err = e.client.Put(ctx0, e.onlinePath(), "true", etcd3.WithLease(leaseResp.ID))
 	cancel()
 	if err != nil {
 		return nil, err
 	}
 
 	return e.client.KeepAlive(ctx, leaseResp.ID)
+}
+
+func (e *EtcdManager) RegisterLocalService(ctx context.Context, service *LocalService) (etcd3.LeaseID, error) {
+	leaseId := service.LeaseId
+
+	// 存在已有的lease, 需检查是否已经过期
+	if leaseId != 0 {
+		ctx0, cancel := context.WithTimeout(ctx, e.defaultTimeout)
+		ttlResp, err := e.client.TimeToLive(ctx0, leaseId)
+		cancel()
+		if err != nil {
+			return 0, err
+		}
+		if ttlResp.TTL < 0 {
+			leaseId = 0
+		}
+	}
+
+	// 没有当前lease，需新建lease
+	if leaseId == 0 {
+		ctx0, cancel := context.WithTimeout(ctx, e.defaultTimeout)
+		leaseResp, err := e.client.Grant(ctx0, e.localServiceTTL)
+		cancel()
+		if err != nil {
+			return 0, err
+		}
+		leaseId = leaseResp.ID
+	} else {
+		// 有lease id，则需要更新lease
+		ctx0, cancel := context.WithTimeout(ctx, e.defaultTimeout)
+		_, err := e.client.KeepAliveOnce(ctx0, leaseId)
+		cancel()
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	ctx0, cancel := context.WithTimeout(ctx, e.defaultTimeout)
+	_, err := e.client.Put(ctx0, e.localServicePath(service.Name), service.Name, etcd3.WithLease(leaseId))
+	cancel()
+	if err != nil {
+		return 0, err
+	}
+
+	return leaseId, nil
 }
 
 func (e *EtcdManager) Close() {
@@ -110,12 +162,13 @@ func NewEtcdManager(endpoint string, username string, password string, prefix st
 	}
 
 	return &EtcdManager{
-		Id:             "",
-		prefix:         prefix,
-		client:         cli,
-		defaultTimeout: 2 * time.Second,
-		keepAliveTTL:   10,
-		node:           nodeMetadata,
+		Id:              "",
+		prefix:          prefix,
+		client:          cli,
+		defaultTimeout:  2 * time.Second,
+		keepAliveTTL:    10,
+		localServiceTTL: 20,
+		node:            nodeMetadata,
 	}, nil
 
 }

@@ -253,6 +253,7 @@ func (s *RegistryServer) Serve() {
 
 	s.etcdManager = emgr
 	s.etcdManager.RefreshMetadata(ctx)
+	s.etcdManager.SubmitMetadata(ctx)
 	ttlCh, err := s.etcdManager.Register(ctx)
 	if err != nil {
 		log.Panicf("register error: %v\n", err)
@@ -272,7 +273,7 @@ func (s *RegistryServer) Serve() {
 	cfgbytes := s.etcdManager.GetConfigNoError(ctx)
 	err = s.UpdateConfig(cfgbytes)
 	if err != nil {
-		log.Panicf("init error: %v\n", err)
+		log.Panicf("etcd init error: %v\n", err)
 	}
 
 	// 监视config变化

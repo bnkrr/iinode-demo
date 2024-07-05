@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"time"
 
@@ -160,6 +161,9 @@ func NewEtcdManager(endpoint string, username string, password string, prefix st
 		DialTimeout: 5 * time.Second,
 		Username:    username,
 		Password:    password,
+		TLS: &tls.Config{
+			InsecureSkipVerify: true,
+		},
 	})
 	if err != nil {
 		return nil, err

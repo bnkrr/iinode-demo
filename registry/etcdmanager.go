@@ -31,7 +31,7 @@ func (e *EtcdManager) localServicePath(serviceName string) string {
 }
 
 func (e *EtcdManager) configPath() string {
-	return fmt.Sprintf("%s/config/%s", e.prefix, e.Id)
+	return fmt.Sprintf("%s/config/global", e.prefix)
 }
 
 func (e *EtcdManager) UpdateMetadataItem(ctx context.Context, name string, value string) error {
@@ -53,6 +53,10 @@ func (e *EtcdManager) SubmitMetadata(ctx context.Context) error {
 		return err
 	}
 	err = e.UpdateMetadataItem(ctx, "ip", e.node.PublicIp)
+	if err != nil {
+		return err
+	}
+	err = e.UpdateMetadataItem(ctx, "loc", e.node.Location)
 	return err
 }
 
